@@ -20,13 +20,13 @@ public:
 
     ~TIdWrapper() = default;
 
-    TIdWrapper(const T& value) = default;
+    TIdWrapper(const T& value) : Raw(value) {};
 
-    TIdWrapper(const T&& value) = default;
+    TIdWrapper(const TIdWrapper&& value) = default;
 
-    TIdWrapper(const TIdWrapper& other) : TIdWrapper(other.Raw) {};
+    TIdWrapper(const TIdWrapper& other) = default;
 
-    TIdWrapper& operator=(const T& value) = default;
+    TIdWrapper& operator=(const TIdWrapper& value) = default;
 
     void CopyToProto(NProtoBuf::Message *message, void (NProtoBuf::Message::*pfn)(T value)) {
         (message->*pfn)(*this);
