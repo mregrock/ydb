@@ -20,30 +20,43 @@ public:
 
     ~TIdWrapper() = default;
 
-    TIdWrapper(const T& value) : Raw(value) {};
+    TIdWrapper(const T& value) = default;
+
+    TIdWrapper(const T&& value) = default;
 
     TIdWrapper(const TIdWrapper& other) : TIdWrapper(other.Raw) {};
 
-
-    TIdWrapper& operator=(const T& value) = delete;
+    TIdWrapper& operator=(const T& value) = default;
 
     void CopyToProto(NProtoBuf::Message *message, void (NProtoBuf::Message::*pfn)(T value)) {
         (message->*pfn)(*this);
     }
 
-    T& operator+=(const T& other) {
-        return this->Raw += other.Raw;
+    TIdWrapper& operator+=(const T& other) {
+        Raw += other.Raw;
+        return *this;
     }
 
-
-    friend TIdWrapper operator+(const TIdWrapper& first, const TIdWrapper& second) Y_WARN_UNUSED_RESULT {
-        return first + second;
+    friend TIdWrapper operator+(const TIdWrapper& first, const T& second) Y_WARN_UNUSED_RESULT {
+        return first->Raw + second->Raw;
     }
+
+    TIdWrapper& operator++(){
+        Raw++;
+        return *this;
+    }
+
+    TIdWrapper operator++(int){
+        TIdWrapper old = *this;
+        operator++();
+        return old;
+    }
+
 
     constexpr auto operator<=>(const TIdWrapper&) const = default;
 
-    T GetRawId(){
-        return this->Raw;
+    T GetRawId() const{
+        return Raw;
     }
 
     friend std::hash<TIdWrapper<T, Tag>>;
