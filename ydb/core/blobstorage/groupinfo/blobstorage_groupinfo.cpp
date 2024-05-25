@@ -553,7 +553,7 @@ TString TBlobStorageGroupInfo::TTopology::ToString() const {
 ////////////////////////////////////////////////////////////////////////////
 // TBlobStorageGroupInfo::TDynamicInfo
 ////////////////////////////////////////////////////////////////////////////
-TBlobStorageGroupInfo::TDynamicInfo::TDynamicInfo(ui32 groupId, ui32 groupGen)
+TBlobStorageGroupInfo::TDynamicInfo::TDynamicInfo(TGroupId groupId, ui32 groupGen)
     : GroupId(groupId)
     , GroupGeneration(groupGen)
 {}
@@ -921,7 +921,7 @@ TVDiskID VDiskIDFromVDiskID(const NKikimrBlobStorage::TVDiskID &x) {
 }
 
 void VDiskIDFromVDiskID(const TVDiskID &id, NKikimrBlobStorage::TVDiskID *proto) {
-    proto->SetGroupID(id.GroupID);
+    proto->SetGroupID(id.GroupID.GetRawId());
     proto->SetGroupGeneration(id.GroupGeneration);
     proto->SetRing(id.FailRealm);
     proto->SetDomain(id.FailDomain);

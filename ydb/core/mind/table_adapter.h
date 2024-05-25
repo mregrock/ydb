@@ -123,7 +123,7 @@ namespace NKikimr {
 
         template<typename T, typename Tag>
         inline void Cast(const TIdWrapper<T, Tag>& from, TMaybe<T>& to){
-            to.ConstructInPlace(from.GetRawId());
+            to.ConstructInPlace(from);
         }
 
         template<typename TRow, typename TColumn>

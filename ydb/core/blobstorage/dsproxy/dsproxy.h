@@ -311,7 +311,7 @@ public:
             SetExecutionRelay(*q, std::exchange(ExecutionRelay, {}));
         }
         ++*Mon->NodeMon->RestartHisto[Min<size_t>(Mon->NodeMon->RestartHisto.size() - 1, RestartCounter)];
-        const TActorId& proxyId = MakeBlobStorageProxyID(Info->GroupID);
+        const TActorId& proxyId = MakeBlobStorageProxyID(Info->GroupID.GetGroupId);
         TActivationContext::Send(new IEventHandle(nodeWardenId, Source, q.release(), 0, Cookie, &proxyId, Span.GetTraceId()));
         PassAway();
         return true;

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "defs.h"
-
 #include <util/str_stl.h>
 #include <util/digest/numeric.h>
 
@@ -19,7 +18,8 @@ struct TVDiskIdShort;
 ////////////////////////////////////////////////////////////////////////////
 #pragma pack(push, 4)
 struct TVDiskID {
-    ui32 GroupID = 0;
+    using TGroupId = TIdWrapper<ui32, TGroupIdTag>;
+    TGroupId GroupID = 0;
     ui32 GroupGeneration = 0;
     ui8 FailRealm = 0;
     ui8 FailDomain = 0;
@@ -27,10 +27,10 @@ struct TVDiskID {
     ui8 Padding = 0;
 
     TVDiskID() = default;
-    TVDiskID(ui32 groupId, ui32 groupGen, TVDiskIdShort vdiskIdShort);
+    TVDiskID(TGroupId groupId, ui32 groupGen, TVDiskIdShort vdiskIdShort);
     TVDiskID(IInputStream &str);
 
-    TVDiskID(ui32 groupId, ui32 groupGen, ui8 failRealm, ui8 failDomain, ui8 vdisk)
+    TVDiskID(TGroupId groupId, ui32 groupGen, ui8 failRealm, ui8 failDomain, ui8 vdisk)
         : GroupID(groupId)
         , GroupGeneration(groupGen)
         , FailRealm(failRealm)
@@ -69,7 +69,7 @@ struct TVDiskID {
 
     ui64 Hash() const {
         ui32 x = (((ui32(FailRealm) << 8) | ui32(FailDomain)) << 8) | ui32(VDisk);
-        ui64 y = GroupID;
+        ui64 y = GroupID.GetRawId();
         y = y << 32ull;
         y |= GroupGeneration;
         return CombineHashes(IntHash<ui64>(y), IntHash<ui64>(x));

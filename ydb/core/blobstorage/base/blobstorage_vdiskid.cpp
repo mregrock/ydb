@@ -1,6 +1,7 @@
 #include "blobstorage_vdiskid.h"
 #include <ydb/core/protos/blobstorage.pb.h>
 #include <ydb/core/protos/blobstorage_disk.pb.h>
+#include <ydb/core/base/id_wrapper.h>
 
 namespace NKikimr {
 
@@ -9,8 +10,7 @@ namespace NKikimr {
     ////////////////////////////////////////////////////////////////////////////
     const TVDiskID TVDiskID::InvalidId = TVDiskID((ui32)-1, (ui32)-1, (ui8)-1, (ui8)-1, (ui8)-1);
 
-
-    TVDiskID::TVDiskID(ui32 groupId, ui32 groupGen, TVDiskIdShort vdiskIdShort)
+    TVDiskID::TVDiskID(TGroupId groupId, ui32 groupGen, TVDiskIdShort vdiskIdShort)
         : GroupID(groupId)
         , GroupGeneration(groupGen)
         , FailRealm(vdiskIdShort.FailRealm)
@@ -34,12 +34,12 @@ namespace NKikimr {
 
     TString TVDiskID::ToString() const {
         return Sprintf("[%" PRIx32 ":%" PRIu32 ":%" PRIu8 ":%" PRIu8 ":%" PRIu8 "]",
-                        GroupID, GroupGeneration, FailRealm, FailDomain, VDisk).data();
+                        GroupID.GetRawId(), GroupGeneration, FailRealm, FailDomain, VDisk).data();
     }
 
     TString TVDiskID::ToStringWOGeneration() const {
         return Sprintf("[%" PRIx32 ":_:%" PRIu8 ":%" PRIu8 ":%" PRIu8 "]",
-                        GroupID, FailRealm, FailDomain, VDisk).data();
+                        GroupID.GetRawId(), FailRealm, FailDomain, VDisk).data();
     }
 
     void TVDiskID::Serialize(IOutputStream &s) const {

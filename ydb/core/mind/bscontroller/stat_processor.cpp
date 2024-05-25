@@ -100,7 +100,7 @@ namespace NKikimr::NBsController {
             GroupCleanupSchedule.erase(GroupCleanupSchedule.begin(), it);
 
             // recalculate percentiles for changed groups
-            for (const TGroupId groupId : ids) {
+            for (const TGroupId& groupId : ids) {
                 Groups[groupId].RecalculatePercentiles();
                 UpdatedGroupIds.insert(groupId);
             }

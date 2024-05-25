@@ -8,6 +8,7 @@
 #include <ydb/core/base/appdata.h>
 #include <ydb/core/base/blobstorage.h>
 #include <ydb/core/base/event_filter.h>
+#include <ydb/core/base/id_wrapper.h>
 #include <ydb/core/protos/blobstorage_base3.pb.h>
 #include <ydb/core/util/log_priority_mute_checker.h>
 
@@ -63,6 +64,7 @@ struct TEncryptionKey {
 // current state of storage group
 class TBlobStorageGroupInfo : public TThrRefBase {
 public:
+    using TGroupId = TIdWrapper<ui32, TGroupIdTag>;
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // ITERATORS
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -280,13 +282,13 @@ public:
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     struct TDynamicInfo {
         // blobstorage group id
-        const ui32 GroupId;
+        const TGroupId GroupId;
         // blobstorage group generation
         const ui32 GroupGeneration;
         // map to quickly get Service id (TActorId) from its order number inside TTopology
         TVector<TActorId> ServiceIdForOrderNumber;
 
-        TDynamicInfo(ui32 groupId, ui32 groupGen);
+        TDynamicInfo(TGroupId groupId, ui32 groupGen);
         TDynamicInfo(const TDynamicInfo&) = default;
         TDynamicInfo(TDynamicInfo&&) = default;
         TDynamicInfo &operator =(TDynamicInfo&&) = default;
@@ -415,7 +417,7 @@ private:
 
 public:
     // blobstorage group id
-    const ui32 GroupID;
+    const TGroupId GroupID;
     // blobstorage group generation
     const ui32 GroupGeneration;
     // erasure primarily

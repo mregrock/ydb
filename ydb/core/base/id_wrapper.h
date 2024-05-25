@@ -16,6 +16,9 @@ class TIdWrapper {
 private:
     T Raw;
 public:
+
+    using Type = T;
+
     TIdWrapper() = default;
 
     ~TIdWrapper() = default;
@@ -28,6 +31,8 @@ public:
 
     TIdWrapper& operator=(const TIdWrapper& value) = default;
 
+    TIdWrapper& operator=(const TIdWrapper&& value) = default;
+
     void CopyToProto(NProtoBuf::Message *message, void (NProtoBuf::Message::*pfn)(T value)) {
         (message->*pfn)(*this);
     }
@@ -38,7 +43,7 @@ public:
     }
 
     friend TIdWrapper operator+(const TIdWrapper& first, const T& second) Y_WARN_UNUSED_RESULT {
-        return first->Raw + second->Raw;
+        return TIdWrapper(first->Raw + second);
     }
 
     TIdWrapper& operator++(){
