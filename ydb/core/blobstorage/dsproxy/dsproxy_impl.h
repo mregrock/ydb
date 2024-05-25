@@ -53,8 +53,8 @@ class TBlobStorageGroupProxy : public TActorBootstrapped<TBlobStorageGroupProxy>
     };
 
     static std::atomic<TMonotonic> ThrottlingTimestamp;
-
-    const ui32 GroupId;
+    using TGroupId = TIdWrapper<ui32, TGroupIdTag>;
+    const TGroupId GroupId;
     TIntrusivePtr<TBlobStorageGroupInfo> Info;
     std::shared_ptr<TBlobStorageGroupInfo::TTopology> Topology;
     TIntrusivePtr<TDsProxyNodeMon> NodeMon;
@@ -285,7 +285,7 @@ class TBlobStorageGroupProxy : public TActorBootstrapped<TBlobStorageGroupProxy>
         const NKikimrProto::EReplyStatus status = (!IsEjected || HasInvalidGroupId())
             ? NKikimrProto::ERROR
             : NKikimrProto::NO_GROUP;
-        auto response = ev->Get()->MakeErrorResponse(status, ErrorDescription, GroupId);
+        auto response = ev->Get()->MakeErrorResponse(status, ErrorDescription, GroupId.GetRawId());
         SetExecutionRelay(*response, std::move(ev->Get()->ExecutionRelay));
         NActors::NLog::EPriority priority = CheckPriorityForErrorState();
         LOG_LOG_S(*TlsActivationContext, priority, NKikimrServices::BS_PROXY, ExtraLogInfo << "Group# " << GroupId

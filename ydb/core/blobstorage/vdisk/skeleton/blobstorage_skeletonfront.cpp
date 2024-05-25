@@ -1317,20 +1317,20 @@ namespace NKikimr {
             const char* name = "Unknown";
             TIntQueueClass *queue = IntQueueHugePutsBackground.get();
             if constexpr (std::is_same_v<TEvPtr, TEvBlobStorage::TEvVMovedPatch::TPtr>) {
-                LWTRACK(VDiskSkeletonFrontVMovedPatchRecieved, ev->Get()->Orbit, VCtx->NodeId, VCtx->GroupId,
+                LWTRACK(VDiskSkeletonFrontVMovedPatchRecieved, ev->Get()->Orbit, VCtx->NodeId, VCtx->GroupId.GetRawId(),
                     VCtx->Top->GetFailDomainOrderNumber(VCtx->ShortSelfVDisk), blob.TabletID(), blob.BlobSize());
                 name = "TEvVMovedPatch";
             } else if constexpr (std::is_same_v<TEvPtr, TEvBlobStorage::TEvVPatchStart::TPtr>) {
-                LWTRACK(VDiskSkeletonFrontVPatchStartRecieved, ev->Get()->Orbit, VCtx->NodeId, VCtx->GroupId,
+                LWTRACK(VDiskSkeletonFrontVPatchStartRecieved, ev->Get()->Orbit, VCtx->NodeId, VCtx->GroupId.GetRawId(),
                     VCtx->Top->GetFailDomainOrderNumber(VCtx->ShortSelfVDisk), blob.TabletID(), blob.BlobSize());
                 queue = IntQueueFastGets.get();
                 name = "TEvVPatchStart";
             } else if constexpr (std::is_same_v<TEvPtr, TEvBlobStorage::TEvVPatchDiff::TPtr>) {
-                LWTRACK(VDiskSkeletonFrontVPatchDiffRecieved, ev->Get()->Orbit, VCtx->NodeId, VCtx->GroupId,
+                LWTRACK(VDiskSkeletonFrontVPatchDiffRecieved, ev->Get()->Orbit, VCtx->NodeId, VCtx->GroupId.GetRawId(),
                     VCtx->Top->GetFailDomainOrderNumber(VCtx->ShortSelfVDisk), blob.TabletID(), blob.BlobSize());
                 name = "TEvVPatchDiff";
             } else if constexpr (std::is_same_v<TEvPtr, TEvBlobStorage::TEvVPatchXorDiff::TPtr>) {
-                LWTRACK(VDiskSkeletonFrontVPatchXorDiffRecieved, ev->Get()->Orbit, VCtx->NodeId, VCtx->GroupId,
+                LWTRACK(VDiskSkeletonFrontVPatchXorDiffRecieved, ev->Get()->Orbit, VCtx->NodeId, VCtx->GroupId.GetRawId(),
                     VCtx->Top->GetFailDomainOrderNumber(VCtx->ShortSelfVDisk), blob.TabletID(), blob.BlobSize());
                 name = "TEvVPatchXorDiff";
             }
@@ -1346,7 +1346,7 @@ namespace NKikimr {
 
             const NKikimrBlobStorage::TEvVPut &record = ev->Get()->Record;
             const TLogoBlobID blob = LogoBlobIDFromLogoBlobID(record.GetBlobID());
-            LWTRACK(VDiskSkeletonFrontVPutRecieved, ev->Get()->Orbit, VCtx->NodeId, VCtx->GroupId,
+            LWTRACK(VDiskSkeletonFrontVPutRecieved, ev->Get()->Orbit, VCtx->NodeId, VCtx->GroupId.GetRawId(),
                    VCtx->Top->GetFailDomainOrderNumber(VCtx->ShortSelfVDisk), blob.TabletID(), blob.BlobSize());
 
             if (logPutInternalQueue) {
@@ -1372,7 +1372,7 @@ namespace NKikimr {
             const ui64 cost = VCtx->CostModel->GetCost(*ev->Get(), &logPutInternalQueue);
 
             const NKikimrBlobStorage::TEvVMultiPut &record = ev->Get()->Record;
-            LWTRACK(VDiskSkeletonFrontVMultiPutRecieved, ev->Get()->Orbit, VCtx->NodeId, VCtx->GroupId,
+            LWTRACK(VDiskSkeletonFrontVMultiPutRecieved, ev->Get()->Orbit, VCtx->NodeId, VCtx->GroupId.GetRawId(),
                  VCtx->Top->GetFailDomainOrderNumber(VCtx->ShortSelfVDisk), record.ItemsSize(),
                  ev->Get()->GetSumBlobSize());
 

@@ -459,7 +459,7 @@ class TTabletReqRebuildHistoryGraph : public TActorBootstrapped<TTabletReqRebuil
 
     void ApplyDiscoveryRange(TEvBlobStorage::TEvRangeResult *msg) {
         if (IntrospectionTrace) {
-            IntrospectionTrace->Attach(MakeHolder<NTracing::TOnApplyDiscoveryRange>(msg->GroupId, msg->From, msg->To));
+            IntrospectionTrace->Attach(MakeHolder<NTracing::TOnApplyDiscoveryRange>(msg->GroupId.GetRawId(), msg->From, msg->To));
         }
         Y_ABORT_UNLESS(RangesToDiscover.erase(msg->To));
         for (TVector<TEvBlobStorage::TEvRangeResult::TResponse>::iterator it = msg->Responses.begin(), end = msg->Responses.end(); it != end; ++it) {

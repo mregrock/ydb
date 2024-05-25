@@ -549,7 +549,7 @@ public:
         TDeque<std::unique_ptr<TEvBlobStorage::TEvVMovedPatch>> events;
 
         ui64 cookie = ((ui64)OriginalId.Hash() << 32) | PatchedId.Hash();
-        events.emplace_back(new TEvBlobStorage::TEvVMovedPatch(OriginalGroupId, Info->GroupID,
+        events.emplace_back(new TEvBlobStorage::TEvVMovedPatch(OriginalGroupId, Info->GroupID.GetRawId(),
                 OriginalId, PatchedId, vDisk, false, cookie, Deadline));
         events.back()->Orbit = std::move(Orbit);
         for (ui64 diffIdx = 0; diffIdx < DiffCount; ++diffIdx) {
@@ -788,7 +788,7 @@ public:
         bool result = true;
         if (Info->Type.ErasureFamily() == TErasureType::ErasureParityBlock) {
             result = TEvBlobStorage::TEvPatch::GetBlobIdWithSamePlacement(OriginalId, &truePatchedBlobId,
-                    MaskForCookieBruteForcing, OriginalGroupId, Info->GroupID);
+                    MaskForCookieBruteForcing, OriginalGroupId, Info->GroupID.GetRawId());
             if (result && PatchedId != truePatchedBlobId) {
                 TStringBuilder str;
                 str << "PatchedId wasn't from TEvBlobStorage::TEvPatch::GetBlobIdWithSamePlacement;";

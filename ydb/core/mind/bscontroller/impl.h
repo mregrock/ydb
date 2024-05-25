@@ -2204,7 +2204,7 @@ public:
     void CommitVirtualGroupUpdates(TConfigState& state);
 
     void StartVirtualGroupSetupMachine(TGroupInfo *group);
-    void StartVirtualGroupDeleteMachine(ui32 groupId, TBlobDepotDeleteQueueInfo& info);
+    void StartVirtualGroupDeleteMachine(TGroupId groupId, TBlobDepotDeleteQueueInfo& info);
 
     void Handle(TEvBlobStorage::TEvControllerGroupDecommittedNotify::TPtr ev);
 

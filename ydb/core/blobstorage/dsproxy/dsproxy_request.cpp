@@ -91,7 +91,7 @@ namespace NKikimr {
                 << " Group# " << GroupId
                 << " Marker# DSP53";
             std::unique_ptr<TEvBlobStorage::TEvPutResult> result(
-                    new TEvBlobStorage::TEvPutResult(NKikimrProto::ERROR, ev->Get()->Id, 0, GroupId, 0.f));
+                    new TEvBlobStorage::TEvPutResult(NKikimrProto::ERROR, ev->Get()->Id, 0, GroupId.GetRawId(), 0.f));
             result->ErrorReason = str.Str();
             result->ExecutionRelay = std::move(ev->Get()->ExecutionRelay);
             LOG_ERROR_S(*TlsActivationContext, NKikimrServices::BS_PROXY,
@@ -310,7 +310,7 @@ namespace NKikimr {
         }
         PutBatchedBucketQueue.clear();
         ++*Mon->EventStopPutBatching;
-        LWPROBE(DSProxyBatchedPutRequest, BatchedPutRequestCount, GroupId);
+        LWPROBE(DSProxyBatchedPutRequest, BatchedPutRequestCount, GroupId.GetRawId());
         BatchedPutRequestCount = 0;
         EnablePutBatching.Update(TActivationContext::Now());
     }
@@ -318,7 +318,7 @@ namespace NKikimr {
     void TBlobStorageGroupProxy::Handle(TEvStopBatchingGetRequests::TPtr& ev) {
         StopGetBatchingEvent = ev;
         ++*Mon->EventStopGetBatching;
-        LWPROBE(DSProxyBatchedGetRequest, BatchedGetRequestCount, GroupId);
+        LWPROBE(DSProxyBatchedGetRequest, BatchedGetRequestCount, GroupId.GetRawId());
         BatchedGetRequestCount = 0;
     }
 

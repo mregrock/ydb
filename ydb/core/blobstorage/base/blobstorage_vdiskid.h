@@ -19,7 +19,7 @@ struct TVDiskIdShort;
 #pragma pack(push, 4)
 struct TVDiskID {
     using TGroupId = TIdWrapper<ui32, TGroupIdTag>;
-    TGroupId GroupID = 0;
+    TGroupId GroupID{0};
     ui32 GroupGeneration = 0;
     ui8 FailRealm = 0;
     ui8 FailDomain = 0;
