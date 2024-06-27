@@ -414,6 +414,11 @@ namespace NKikimr {
             NHullPrivate::PutToMerger<TKey, TIter, TRecordMerger, TPQueue>(merger, PQueue);
         }
 
+        template <class THeap>
+        void PutToHeap(THeap& heap){
+            heap.Add(this);
+        }
+
         TString ToString() const {
             return NHullPrivate::ToString<TKey, TIter, TPQueue>(PQueue);
         }
