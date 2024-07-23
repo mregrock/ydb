@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package Ydb.BSConfig.V1;
+
+option java_package = "com.yandex.ydb.bsconfig.v1";
+option java_outer_classname = "BSConfigGrpc";
+option java_multiple_files = true;
+
+import "ydb/public/api/protos/ydb_bsconfig.proto";
+
+service BSConfigService {
+
+    // Command used to define typical host configuration.
+    rpc DefineHostConfig(BSConfig.DefineHostConfigRequest) returns (BSConfig.DefineHostConfigResponse);
+
+    // Command issued to read specific (or all) host configurations associated with the BS_CONTROLLER tablet.
+    rpc ReadHostConfig(BSConfig.ReadHostConfigRequest) returns (BSConfig.ReadHostConfigResponse);
+
+    // Command used to delete typical host configuration identified by its key.
+    rpc DeleteHostConfig(BSConfig.DeleteHostConfigRequest) returns (BSConfig.DeleteHostConfigResponse);
+
+    // Command used to define box configuration.
+    rpc DefineBox(BSConfig.DefineBoxRequest) returns (BSConfig.DefineBoxResponse);
+
+    // Command issued to read specific (or all) boxes.
+    rpc ReadBox(BSConfig.ReadBoxRequest) returns (BSConfig.ReadBoxResponse);
+
+    // Command used to delete box identified by its key.
+    rpc DeleteBox(BSConfig.DeleteBoxRequest) returns (BSConfig.DeleteBoxResponse);
+
+    // Command used to define storage pool.
+    rpc DefineStoragePool(BSConfig.DefineStoragePoolRequest) returns (BSConfig.DefineStoragePoolResponse);
+
+    // Command issued to read specific (or all) storage pools associated with the BS_CONTROLLER tablet.
+    rpc ReadStoragePool(BSConfig.ReadStoragePoolRequest) returns (BSConfig.ReadStoragePoolResponse);
+
+    // Command used to delete storage pool identified by its key.
+    rpc DeleteStoragePool(BSConfig.DeleteStoragePoolRequest) returns (BSConfig.DeleteStoragePoolResponse);
+
+    // first, scan through all existing groups that are not defined as a part of storage pools and check
+    // their respective VDisks; as a first step, prepare set of groups inside storage pools
+    rpc ProposeStoragePool(BSConfig.ProposeStoragePoolRequest) returns (BSConfig.ReadStoragePoolResponse);
+
+    rpc UpdateDriveStatus(BSConfig.UpdateDriveStatusRequest) returns (BSConfig.UpdateDriveStatusResponse);
+
+    rpc ReadDriveStatus(BSConfig.ReadDriveStatusRequest) returns (BSConfig.ReadDriveStatusResponse);
+
+    rpc QueryBaseConfig(BSConfig.QueryBaseConfigRequest) returns (BSConfig.QueryBaseConfigResponse);
+
+    rpc ReadSettings(BSConfig.ReadSettingsRequest) returns (BSConfig.ReadSettingsResponse);
+
+    // command intended for internal use
+    rpc ReassignGroupDisk(BSConfig.ReassignGroupDiskRequest) returns (BSConfig.ReassignGroupDiskResponse);
+
+    rpc MergeBox(BSConfig.MergeBoxRequest) returns (BSConfig.MergeBoxResponse);
+
+    // move groups between storage pools; no checks of SP constraints are performed
+    rpc MoveGroups(BSConfig.MoveGroupsRequest) returns (BSConfig.MoveGroupsResponse);
+
+    rpc EnableSelfHeal(BSConfig.EnableSelfHealRequest) returns (BSConfig.EnableSelfHealResponse);
+
+    rpc EnableDonorMode(BSConfig.EnableDonorModeRequest) returns (BSConfig.EnableDonorModeResponse);
+
+    rpc DropDonorDisk(BSConfig.DropDonorDiskRequest) returns (BSConfig.DropDonorDiskResponse);
+
+    rpc WipeVDisk(BSConfig.WipeVDiskRequest) returns (BSConfig.WipeVDiskResponse);
+
+    rpc RestartPDisk(BSConfig.RestartPDiskRequest) returns (BSConfig.RestartPDiskResponse);
+
+    rpc AddDriveSerial(BSConfig.AddDriveSerialRequest) returns (BSConfig.AddDriveSerialResponse);
+
+    // Remove drive if empty and delete PDisk, but leave row in table with LifeStage == REMOVED
+    rpc RemoveDriveSerial(BSConfig.RemoveDriveSerialRequest) returns (BSConfig.RemoveDriveSerialResponse);
+
+    rpc ForgetDriveSerial(BSConfig.ForgetDriveSerialRequest) returns (BSConfig.ForgetDriveSerialResponse);
+
+    rpc MigrateToSerial(BSConfig.MigrateToSerialRequest) returns (BSConfig.MigrateToSerialResponse);
+
+    rpc SetPDiskSpaceMarginPromille(BSConfig.SetPDiskSpaceMarginPromilleRequest) returns (BSConfig.SetPDiskSpaceMarginPromilleResponse);
+
+    rpc UpdateSettings(BSConfig.UpdateSettingsRequest) returns (BSConfig.UpdateSettingsResponse);
+
+    rpc AllocateVirtualGroup(BSConfig.AllocateVirtualGroupRequest) returns (BSConfig.AllocateVirtualGroupResponse);
+
+    rpc DecommitGroups(BSConfig.DecommitGroupsRequest) returns (BSConfig.DecommitGroupsResponse);
+
+    rpc CancelVirtualGroup(BSConfig.CancelVirtualGroupRequest) returns (BSConfig.CancelVirtualGroupsResponse);
+
+    rpc Init(BSConfig.InitRequest) returns (BSConfig.InitResponse);
+}

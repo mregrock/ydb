@@ -1,0 +1,1234 @@
+syntax = "proto3";
+option cc_enable_arenas = true;
+
+package Ydb.BSConfig;
+
+option java_package = "com.yandex.ydb.bsconfig.proto";
+option java_outer_classname = "BSConfigProtos";
+option java_multiple_files = true;
+
+import "ydb/public/api/protos/ydb_operation.proto";
+
+
+//
+// BSConfig API.
+//
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// HOSTS
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Host key structure defines node by providing its FQDN and Interconnect port. There must be unique mapping from
+// FQDN:port to NodeId.
+message HostKey {
+    // fully qualified domain name of the host
+    string fqdn = 1;
+    // interconnect port to use
+    int32 ic_port = 2;
+    // may be set instead of Fqdn/IcPort to specify explicit NodeId
+    uint32 node_id = 3;
+}
+
+// Definition of a host entry containing its key (which provides NodeId) and reference to typical host configuration
+// that must exist.
+message Host {
+    // unique host key defining its location
+    HostKey key = 1;
+    // reference to typical host configuration table
+    uint64 host_config_id = 2;
+    // if non-zero, then enforce specific NodeId for this FQDN to prevent resolving
+    uint32 enforced_node_id = 3;
+}
+
+// Enum defining PDisk underlying drive type (rotational or solid state)
+enum PDiskType {
+    ROT = 0; // rotational drives (HDD)
+    SSD = 1; // solid state drives (SSD)
+    NVME = 2; // PCIe-connected solid state drives (NVMe SSD)
+    UNKNOWN_TYPE = 3; // used if device type is unknown or if group consists of different PDisk device types
+}
+
+message PDiskState {
+    enum E {
+        Initial = 0;
+        InitialFormatRead = 1;
+        InitialFormatReadError = 2;
+        InitialSysLogRead = 3;
+        InitialSysLogReadError = 4;
+        InitialSysLogParseError = 5;
+        InitialCommonLogRead = 6;
+        InitialCommonLogReadError = 7;
+        InitialCommonLogParseError = 8;
+        CommonLoggerInitError = 9;
+        Normal = 10;
+        OpenFileError = 11;
+        ChunkQuotaError = 12;
+        DeviceIoError = 13;
+        Reserved14 = 14;
+        Reserved15 = 15;
+        Reserved16 = 16;
+
+        Missing = 252;
+        Timeout = 253;
+        NodeDisconnected = 254;
+        Unknown = 255;
+        // end
+    }
+}
+
+message VDiskID {
+    optional uint32 group_id = 1;
+    optional uint32 group_generation = 2;
+    optional uint32 ring = 3;
+    optional uint32 domain = 4;
+    optional uint32 vdisk = 5;
+}
+
+message PDiskId {
+    optional uint32 node_id = 1;
+    optional uint32 pdisk_id = 2;
+}
+
+message VSlotId {
+    optional uint32 node_id = 1;
+    optional uint32 pdisk_id = 2;
+    optional uint32 vslot_id = 3;
+}
+
+message PDiskSpaceColor {
+    enum E {
+        GREEN = 0;
+        CYAN = 10;
+        LIGHT_YELLOW = 15;
+        YELLOW = 20;
+        LIGHT_ORANGE = 30;
+        PRE_ORANGE = 35;
+        ORANGE = 40;
+        RED = 50;
+        BLACK = 60;
+    }
+}
+
+message VDiskMetrics {
+    optional VDiskID vdisk_id = 1;
+    optional uint32 satisfaction_rank = 2;
+    optional uint64 available_size = 3;
+    optional uint64 allocated_size = 4;
+    //optional uint64 ReadThroughput = 5; // bytes per second
+    //optional uint64 WriteThroughput = 6; // bytes per second
+    optional uint32 status_flags = 7;
+    optional VSlotId vslot_id = 8;
+    optional double occupancy = 9;
+    optional PDiskSpaceColor.E space_color = 10;
+}
+
+message PDiskMetrics {
+    optional uint32 pdisk_id = 1;
+    optional uint64 available_size = 2;
+    optional uint64 total_size = 3;
+    optional uint64 max_read_throughput = 4; // bytes per second
+    optional uint64 max_write_throughput = 5; // bytes per second
+    optional uint64 non_real_time_ms = 6; // ms per second of non-realtime, [0..1000]
+    optional uint64 slow_device_ms = 7; // ms per second of slow device, [0..1000]
+    optional uint32 max_iops = 8; // number of IOPS this device can carry out
+    
+    // maximum expected slot size; if set, then it is guaranteed that EnforcedDynamicSlotSize bytes of space are
+    // available for every slot over this PDisk; if not set, then no space enforcement assumed
+    optional uint64 enforced_dynamic_slot_size = 9;
+
+    optional PDiskState.E state = 10;
+
+    optional uint64 update_timestamp = 11; // TInstant::GetValue()
+}
+
+// sets the parameters of PDisk
+message PDiskConfig {
+    enum ESwitch {
+        DoNotTouch = 0;
+
+        Enable = 1;
+        ForceEnable = 2;
+
+        Disable = 3;
+        ForceDisable = 4;
+    };
+
+    optional uint64 statistics_update_interval_ms = 100;
+
+    optional uint64 bytes_scheduler_weight = 105;
+    optional uint64 log_weight = 107;
+    optional uint64 fresh_weight = 108;
+    optional uint64 comp_weight = 109;
+    optional uint64 sync_log_weight = 110;
+    optional uint64 huge_weight = 111;
+    optional uint64 fast_read_weight = 112;
+    optional uint64 other_read_weight = 113;
+    optional uint64 load_weight = 114;
+    optional uint64 low_read_weight = 120;
+
+    // There will be approximately (OWNERS * MaxLogChunksPerOwnerMultiplier / MaxLogChunksPerOwnerDivisor) log chunks
+    // We call it cutThreshold
+    optional uint64 min_log_chunks_total = 1;
+    optional uint64 max_log_chunks_per_owner_multiplier = 2;
+    optional uint64 max_log_chunks_per_owner_divisor = 3;
+    // Once SortFreeChunksPerItems chunks are released, free chuks are sorted
+    optional uint64 sort_free_chunks_per_items = 4;
+
+    optional uint32 sector_size = 6;
+    optional uint32 chunk_size = 7;
+
+    optional ESwitch get_drive_data_switch = 1000;  // Disable is same as DoNotTouch.
+    optional ESwitch write_cache_switch = 1001;  // non-force versions need GetDriveDataSwitch enabled to work.
+
+    optional uint64 drive_model_seek_time_ns = 1005;
+    optional uint64 drive_model_speed_bps = 1006;
+    optional uint64 drive_model_bulk_write_block_size = 1008;
+    optional uint64 drive_model_trim_speed_bps = 1009;
+    optional uint64 reordering_ms = 1011;
+    optional uint64 cost_limit_ns = 1022;
+    optional uint64 device_in_flight = 1023;
+
+    optional uint32 buffer_pool_buffer_size_bytes = 1024;
+    optional uint32 buffer_pool_buffer_count = 1025;
+    optional uint32 max_queued_completion_actions = 1026;
+
+    optional uint64 insane_log_chunks_multiplier = 2000;  // Log of cutThreshold * InsaneLogChunksMultiplier is insane
+
+    optional uint64 expected_slot_count = 2001; // Number of slots to calculate per-vdisk disk space limit.
+};
+
+// Single drive descriptor of typical host configuration structure
+message HostConfigDrive {
+    // path to the device on the host node
+    string path = 1;
+    // drive type (rotational or solid state)
+    PDiskType type = 2;
+    // is this drive shared with OS in any way? (i.e. has OS partitions)
+    bool shared_with_os = 3;
+    // is this drive read-centric?
+    bool read_centric = 4;
+    // nontransparent user-defined kind used for filtering when picking up groups
+    uint64 kind = 5;
+
+    // optional PDisk config for these drives; if not set, default configuration is applied; overrides host-wide default
+    PDiskConfig pdisk_config = 6;
+}
+
+message HostConfigInfo {
+    // unique (to BS_CONTROLLER tablet) host configuration integer id (key)
+    uint64 host_config_id = 1;
+    // user-friendly name of typical configuration
+    string name = 2;
+    // a full set of drives on every host
+    repeated HostConfigDrive drive = 3;
+
+    // host-wide default configuration for every PDisk
+    PDiskConfig default_host_pdisk_config = 4;
+
+    // some syntactic sugar -- one drive type per path
+    repeated string rot = 5;
+    repeated string ssd = 6;
+    repeated string nvme = 7;
+
+    // item's generation to prevent concurrent modification
+    uint64 item_config_generation = 100;
+}
+
+message DefineHostConfigRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+
+    HostConfigInfo host_config_info = 2;
+}
+
+message DefineHostConfigResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message DefineHostConfigResult {
+    // path to the drive
+    string path = 1;
+}
+
+// Command issued to read specific (or all) host configurations associated with the BS_CONTROLLER tablet.
+message ReadHostConfigRequest {
+    Ydb.Operations.OperationParams operation = 1;
+    // if empty, then all host configuration entries are returned
+    repeated uint64 host_config_id = 2;
+}
+
+message ReadHostConfigResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message ReadHostConfigResult {
+    repeated uint64 host_config_id = 1;
+    repeated HostConfigInfo host_config_info = 2;
+
+    // path to the drive
+    repeated string path = 3;
+}
+
+// Command used to delete typical host configuration identified by its key.
+message DeleteHostConfigRequest {
+
+    Ydb.Operations.Operation operation = 1;
+    uint64 host_config_id = 2;
+
+    // item's generation to prevent concurrent modification
+    uint64 item_config_generation = 100;
+}
+
+message DeleteHostConfigResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message DeleteHostConfigResult {
+    uint64 host_config_id = 1;
+    HostKey host_key = 2;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// BOXES
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+message Box {
+    uint64 box_id = 1;
+    string name = 2;
+    repeated bytes user_id = 3;
+    repeated Host host = 4;
+
+    // item's generation to prevent concurrent modification
+    uint64 item_config_generation = 100;
+}
+
+message DefineBoxRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+
+    Box box = 2;
+}
+
+message DefineBoxResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message DefineBoxResult {
+    HostKey host_key = 1;
+    uint64 host_config_id = 2;
+}
+
+message ReadBoxRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    // if empty, then all box entries are returned
+    repeated uint64 box_id = 2;
+}
+
+message ReadBoxResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message ReadBoxResult {
+    repeated uint64 box_id = 1;
+    repeated Box box = 2;
+}
+
+message DeleteBoxRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    uint64 box_id = 2;
+
+    // item's generation to prevent concurrent modification
+    uint64 item_config_generation = 100;
+}
+
+message DeleteBoxResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message DeleteBoxResult {
+    uint64 box_id = 1;
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// STORAGE POOLS
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+message GroupGeometry {
+    uint32 realm_level_begin = 1;
+    uint32 realm_level_end = 2;
+    uint32 domain_level_begin = 3;
+    uint32 domain_level_end = 4;
+    uint32 num_fail_realms = 5;
+    uint32 num_fail_domains_per_fail_realm = 6;
+    uint32 num_vdisks_per_fail_domain = 7;
+}
+
+message GroupUsagePattern {
+    uint64 space_bytes = 1;
+    uint64 write_iops = 2;
+    uint64 write_bytes_per_second = 3;
+    uint64 read_iops = 4;
+    uint64 read_bytes_per_second = 5;
+    uint64 in_mem_cache_bytes = 6;
+}
+
+message PDiskFilter {
+    message RequiredProperty {
+        oneof Property {
+            // require certain drive type
+            PDiskType type = 1;
+            // require certain SharedWithOs property
+            bool shared_with_os = 2;
+            // require certain ReadCentric property
+            bool read_centric = 3;
+            // require certain kind
+            uint64 kind = 4;
+        }
+    }
+    // conjunction of required properties; the same properties must not repeat
+    repeated RequiredProperty property = 1;
+}
+
+message ScopeId {
+    optional fixed64 x1 = 1;
+    optional fixed64 x2 = 2;
+}
+
+message NodeLocation {
+    // compatibility section -- will be removed in future versions
+    optional uint32 data_center_num = 1 [deprecated=true];
+    optional uint32 room_num = 2 [deprecated=true];
+    optional uint32 rack_num = 3 [deprecated=true];
+    optional uint32 body_num = 4 [deprecated=true];
+    optional uint32 body = 100500 [deprecated=true]; // for compatibility with WalleLocation
+
+    optional string data_center = 10;
+    optional string module = 20;
+    optional string rack = 30;
+    optional string unit = 40;
+}
+
+message StoragePool {
+    message ExistingGroups {
+        repeated uint32 group_id = 1;
+    }
+    // the box in which we are creating this storage pool
+    uint64 box_id = 1;
+    // integer key unique to the box; if set to zero, Name is used for lookup
+    uint64 storage_pool_id = 2;
+    // user-friendly name
+    string name = 3;
+    // name for erasure species of contained groups
+    string erasure_species = 4;
+    // group geometry defining
+    GroupGeometry geometry = 5;
+    // kind of created VDisks/VSlots [TVDiskKind.EVDiskKind textual repr]
+    string vdisk_kind = 6;
+    // how this storage pool is going to be used
+    GroupUsagePattern usage_pattern = 7;
+    // kind of storage pool (user-defined)
+    string kind = 8;
+    // explicit number of groups to create
+    uint32 num_groups = 9;
+    // allowed users
+    repeated bytes user_id = 10;
+    // matching PDisks
+    repeated PDiskFilter pdisk_filter = 11;
+    // existing groups (used while migrating from old-style configuration)
+    ExistingGroups existing_groups = 12;
+    // scope id for the pool clients
+    ScopeId scope_id = 13;
+    // minimize correlation of groups and drives
+    bool randomize_group_mapping = 14;
+    // primarily for debugging purposes; expected slot size for group allocation
+    repeated uint64 expected_group_slot_size = 15;
+
+    // item's generation to prevent concurrent modification
+    uint64 item_config_generation = 100;
+
+    // encryption mode: 0 for none, 1 for the current mode (chacha8)
+    uint32 encryption_mode = 101;
+}
+
+message DefineStoragePoolRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    StoragePool storage_pool = 2;
+}
+
+message DefineStoragePoolResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message DefineStoragePoolResult {
+    // integer key unique to the box; if set to zero, Name is used for lookup
+    uint64 storage_pool_id = 1;
+    // user-friendly name
+    string name = 2;
+    // name for erasure species of contained groups
+    string erasure_species = 3;
+    // kind of created VDisks/VSlots [TVDiskKind.EVDiskKind textual repr]
+    string vdisk_kind = 4;
+}
+
+message ReadStoragePoolRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    // use Max<ui64> to query all the pools
+    uint64 box_id = 2;
+    // calculates intersection of names and ids
+    // when empty, then query all the boxes
+    repeated uint64 storage_pool_id = 3;
+    // when empty, then query all the boxes
+    repeated string name = 4;
+}
+
+message ReadStoragePoolResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message ReadStoragePoolResult {
+    repeated string vdisk_kind = 1;
+    repeated StoragePool storage_pool = 2;
+}
+
+message DeleteStoragePoolRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    uint64 box_id = 2;
+    uint64 storage_pool_id = 3;
+
+    // item's generation to prevent concurrent modification
+    uint64 item_config_generation = 100;
+}
+
+message DeleteStoragePoolResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message DeleteStoragePoolResult {
+    uint64 storage_pool_id = 1;
+    uint32 group_id = 2;
+}
+
+message ProposeStoragePoolsRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+}
+
+message ProposeStoragePoolResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message ProposeStoragePoolResult {
+    string vdisk_kind = 1;
+    StoragePool storage_pool = 2;
+}
+
+enum DriveStatus {
+    // value of status is unknown (default)
+    UNKNOWN = 0;
+    // working as expected
+    ACTIVE = 1;
+    // new groups are not created over this drive, but existing ones continue to work as expected
+    INACTIVE = 2;
+    // drive is not working, groups are automatically moved out of this drive upon reception of this status
+    BROKEN = 3;
+    reserved 4;
+    // drive is expected to become BROKEN soon, new groups are not created, old groups are asynchronously moved out from this drive
+    FAULTY = 5;
+    // same as INACTIVE, but drive is counted in fault model as not working
+    TO_BE_REMOVED = 6;
+}
+
+enum DecommitStatus {
+    // unset status -- missing optional field
+    DECOMMIT_UNSET = 0;
+    // no decomission
+    DECOMMIT_NONE = 1;
+    // drive is going to be removed soon, but SelfHeal logic would not remove it automatically
+    DECOMMIT_PENDING = 2;
+    // drive is going to be settled automatically
+    DECOMMIT_IMMINENT = 3;
+    // drive is working as usual, but decommitted slots are not placed here
+    DECOMMIT_REJECTED = 4;
+}
+
+message GroupStatus {
+    enum E {
+        // group status is unknown (default value)
+        UNKNOWN = 0;
+        // all VDisks of the group are READY for specific period of time
+        FULL = 1;
+        // some of VDisks are operational, but group is not yet DEGRADED
+        PARTIAL = 2;
+        // group is DEGRADED -- one random failure may lead to group loss (but may not lead too)
+        DEGRADED = 3;
+        // group is not available for operation
+        DISINTEGRATED = 4;
+    }
+}
+
+message DriveLifeStage {
+    enum E {
+        // disk drive has been seen on a node, but is not added to BSC yet
+        FREE = 0;
+        // disk drive has been added to BSC
+        ADDED_BY_DSTOOL = 1;
+        // disk drive has been removed from BSC
+        REMOVED_BY_DSTOOL = 2;
+    }
+}
+
+message SerialManagementStage {
+    enum E {
+        DISCOVER_SERIAL = 0;
+        CHECK_SERIAL = 1;
+        ONLY_SERIAL = 2;
+    }
+}
+
+message ChannelKind {
+    enum E {
+        System = 0;
+        Data = 1;
+        Log = 2;
+    }
+}
+
+message ChannelProfile {
+    optional string StoragePoolName = 1; // used when creating tablet through BSC -> Hive
+    optional string StoragePoolKind = 2; // used when creating tablet through Schemeshard
+    optional uint32 Count = 3;
+    optional ChannelKind.E ChannelKind = 4;
+}
+
+message UpdateDriveStatus {
+    // host on which we are looking for the drive
+    HostKey host_key = 1;
+    // absolute path to the device as enlisted in PDisk configuration
+    string path = 2;
+    // new status
+    DriveStatus status = 3;
+    // may be set instead of path to identify PDisk
+    uint32 pdisk_id = 4;
+    // may be set instead of path and PDiskId to identify PDisk
+    string serial = 5;
+    // used only in return of ReadDriveStatus
+    uint64 status_change_timestamp = 6;
+    DecommitStatus decommit_status = 7;
+}
+
+message UpdateDriveStatusRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    UpdateDriveStatus update_drive_status = 2;
+}
+
+message UpdateDriveStatusResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message UpdateDriveStatusResult {
+    // host on which we are looking for the drive
+    HostKey host_key = 1;
+    // may be set instead of path to identify PDisk
+    uint32 pdisk_id = 2;
+    // absolute path to the device as enlisted in PDisk configuration
+    string path = 3;
+}
+
+message ReadDriveStatusRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    // host to query; if not set, then query all hosts
+    HostKey host_key = 2;
+    // path on the host; if empty, then query all drives on specified hosts (or on all hosts)
+    string path = 3;
+}
+
+message ReadDriveStatusResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message ReadDriveStatusResult {
+    DriveStatus drive_status = 1;
+}
+
+message QueryBaseConfigRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    bool retrieve_devices = 2;
+    bool virtual_groups_only = 3;
+}
+
+message QueryBaseConfigResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message QueryBaseConfigResult {
+    BaseConfig base_config = 1;
+}
+
+message ReadSettingsRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+}
+
+message ReadSettingsResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message ReadSettingsResult {
+    UpdateSettings settings = 1;
+}
+
+message ReassignGroupDiskRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    uint32 group_id = 2;
+    uint32 group_generation = 3;
+    uint32 fail_realm_idx = 4;
+    uint32 fail_domain_idx = 5;
+    uint32 vdisk_idx = 6;
+    // optional; when not specified, selected automatically
+    PDiskId target_pdisk_id = 7;
+    // when set, donor mode is not used even if it is enabled through BSC
+    bool suppress_donor_mode = 8;
+    reserved 9;
+}
+
+message ReassignGroupDiskResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message ReassignGroupDiskResult {
+    uint32 group_id = 1;
+    VDiskID vdisk_id = 2;
+    PDiskId pdisk_id = 3;
+}
+
+message SanitizeGroupRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    uint32 group_id = 2;
+}
+
+message SanitizeGroupResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message SanitizeGroupResult {
+    uint32 group_id = 1;
+}
+
+message BoxStoragePoolId {
+    uint64 box_id = 1;
+    uint64 storage_pool_id = 2;
+}
+
+message MergeBoxesRequest {
+    message StoragePoolIdMap {
+        uint64 origin_storage_pool_id = 1;
+        uint64 target_storage_pool_id = 2;
+    }
+
+    Ydb.Operations.OperationParams operation_params = 1;
+    uint64 origin_box_id = 2;
+    uint64 origin_box_generation = 3;
+    uint64 target_box_id = 4;
+    uint64 target_box_generation = 5;
+    repeated StoragePoolIdMap storage_pool_id_map = 6;
+}
+
+message MergeBoxesResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message MergeBoxedResult {
+    uint64 box_id = 1;
+    BoxStoragePoolId box_storage_pool_id = 2;
+}
+
+message MoveGroupsRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    uint64 box_id = 2;
+    uint64 origin_storage_pool_id = 3;
+    uint64 origin_storage_pool_generation = 4;
+    uint64 target_storage_pool_id = 5;
+    uint64 target_storage_pool_generation = 6;
+    // if no groups are provided, then all groups of origin storage pool are moved
+    repeated uint32 explicit_group_id = 7;
+}
+
+message MoveGroupsResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message MoveGroupsResult {
+    string name = 1;
+    BoxStoragePoolId pool_id = 2;
+    uint64 generation = 3;
+    uint64 pool_generation = 4;
+}
+
+message MoveCommand {
+    uint32 group_id = 1;
+    uint32 origin_node_id = 2;
+    uint32 origin_pdisk_id = 3;
+    uint32 origin_vslot_id = 4;
+    uint32 target_node_id = 5;
+    uint32 target_pdisk_id = 6;
+}
+
+message EnableSelfHealRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    bool enable = 2;
+}
+
+message EnableSelfHealResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message EnableSelfHealResult {
+}
+
+message EnableDonorModeRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    bool enable = 2;
+}
+
+message EnableDonorModeResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message EnableDonorModeResult {
+}
+
+message DropDonorDiskRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    VSlotId vslot_id = 2;
+    VDiskID vdisk_id = 3;
+}
+
+message DropDonorDiskResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message DropDonorDiskResult {
+    VSlotId vslot_id = 1;
+    VDiskID vdisk_id = 2; 
+}
+
+message WipeVDiskRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    VSlotId vslot_id = 2;
+    VDiskID vdisk_id = 3;
+}
+
+message WipeVDiskResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message WipeVDiskResult {
+    VSlotId vslot_id = 1;
+    VDiskID vdisk_id = 2;   
+}
+
+message RestartPDiskRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    PDiskId target_pdisk_id = 2;
+}
+
+message RestartPDiskResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message RestartPDiskResult {
+    uint32 node_id = 1;
+    uint32 pdisk_id = 2;
+}
+
+message SetScrubPeriodicityRequest {
+    // in seconds; 0 = disable
+    Ydb.Operations.OperationParams operation_params = 1;
+    uint32 ScrubPeriodicity = 2;
+}
+
+message SetScrubPeriodicityResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message SetScrubPeriodicityResult {
+}
+
+message AddDriveSerialRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    string serial = 2;
+    uint64 box_id = 3;
+    uint64 kind = 4;
+    // default UNKNOWN type implies auto-detection of drive type
+    PDiskType pdisk_type = 5;
+    PDiskConfig pdisk_config = 6;
+}
+
+message AddDriveSerialResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message AddDriveSerialResult {
+    string serial = 1;
+    DriveLifeStage.E life_stage = 2;
+}
+
+message RemoveDriveSerialRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    string serial = 2;
+}
+
+message RemoveDriveSerialRespone {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message RemoveDriveSerialResult {
+    string serial = 1;
+}
+
+// Remove drive if empty and delete PDisk, but totaly erase all drive-related info from BSC's internal database
+message ForgetDriveSerialRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    string serial = 2;
+}
+
+message ForgetDriveSerialResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message ForgetDriveSerialResult {
+}
+
+message MigrateToSerialRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    SerialManagementStage.E stage = 2;
+}
+
+message MigrateToSerialResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message MigrateToSerialResult {
+    uint32 node_id = 1;
+    uint32 pdisk_id = 2;
+}
+
+message SetPDiskSpaceMarginPromilleRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    uint32 pdisk_space_margin_promille = 2;
+}
+
+message SetPDiskSpaceMarginPromilleResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message SetPDiskSpaceMarginPromilleResult {
+}
+
+message UpdateSettings {
+    repeated uint32 default_max_slots = 2;
+    repeated bool enable_self_heal = 3;
+    repeated bool enable_donor_mode = 4;
+    repeated uint64 scrub_periodicity_seconds = 5;
+    repeated uint32 pdisk_space_margin_promille = 6;
+    repeated uint32 group_reserve_min = 7;
+    repeated uint32 group_reserve_part_ppm = 8;
+    repeated uint32 max_scrubbed_disks_at_once = 9;
+    repeated PDiskSpaceColor.E pdisk_space_color_border = 10;
+    repeated bool enable_group_layout_sanitizer = 11;
+    // TODO
+    // repeated SerialManagementStage.E SerialManagementStage = 12;
+    repeated bool allow_multiple_realms_occupation = 13;
+    repeated bool use_self_heal_local_policy = 14;
+    repeated bool try_to_relocate_broken_disks_locally_first = 15;
+}
+
+message UpdateSettingsRequest {
+    // each value may be specified either one time, or zero times; when it is specified, its value is written to State
+    // and applied immediately; when no value specified, setting kept unchanged; if value is specified more than one
+    // time, then last value is applied
+    Ydb.Operations.OperationParams operation_params = 1;
+    UpdateSettingsRequest update_settings_request = 2;
+}
+
+message UpdateSettingsResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message UpdateSettingsResult {
+}
+
+message AllocateVirtualGroupRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    string name = 2;
+    oneof HiveDesignator {
+        uint64 hive_id = 3;
+        string database = 8;
+    }
+    oneof StoragePool {
+        string storage_pool_name = 4;
+        BoxStoragePoolId storage_pool_id = 5;
+    }
+    repeated ChannelProfile channel_profiles = 6;
+    // when the tablet is already created; for testing purposes only
+    uint64 blob_depot_id = 7;
+}
+
+message AllocateVirtualGroupResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message AllocateVirtualGroupResult {
+    uint32 group_id = 1;
+    bool already = 2;
+}
+
+message GroupDecommitStatus {
+    enum E {
+        NONE = 0; // no decomission
+        PENDING = 1; // decommission machinery is starting
+        IN_PROGRESS = 2; // decomission underway
+        DONE = 3; // group decomission complete
+    }
+}
+
+message DecommitGroupsRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    // group ids to decommit
+    repeated uint32 group_ids = 2;
+    oneof HiveDesignator {
+        // hive under which it is required to create blob depot tablets
+        uint64 hive_id = 3;
+        // database path
+        string database = 5;
+    }
+    // where to store decommitted groups' data
+    repeated ChannelProfile channel_profiles = 4;
+}
+
+message DecommitGroupsResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message DecommitGroupsResult {
+    uint32 group_id = 1;
+    uint64 box_id = 2;
+    uint64 storage_pool_id = 3;
+    string storage_pool_name = 4;
+}
+
+message CancelVirtualGroupRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    // id of a group we are going to cancel
+    uint32 group_id = 2;
+}
+
+message CancelVirtualGroupResponse {
+    // Operation contains the result of the request. Check the ydb_operation.proto.
+    Ydb.Operations.Operation operation = 1;
+}
+
+message CancelVirtualGroupResult {
+    uint32 group_id = 1;
+}
+
+message SetVDiskReadOnlyRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    VSlotId vslot_id = 2;
+    VDiskID vdisk_id = 3;
+    bool value = 4;
+}
+
+message SetVDiskReadOnlyResponse {
+    Ydb.Operations.Operation operation = 1;
+}
+
+message SetVDiskReadOnlyResult {
+    VSlotId vslot_id = 1;
+    VDiskID vdisk_id = 2;
+    string current_mood = 3;
+    string target_mood = 4;
+}
+
+enum TriStateBool {
+    kFalse = 0;
+    kTrue = 1;
+    kNotSet = 2;
+}
+
+enum NodeType {
+    NT_UNKNOWN = 0;
+    NT_STATIC = 1;
+    NT_DYNAMIC = 2;
+}
+
+enum VirtualGroupState {
+    NEW = 0; // just created
+    CREATE_FAILED = 1; // error while creating VirtualGroup
+    WORKING = 2; // operational
+    DELETING = 3; // going to delete from Hive
+}
+
+message BaseConfig {
+    message PDisk {
+        uint32 node_id = 1;
+        uint32 pdisk_id = 2;
+        string path = 3;
+        PDiskType type = 4;
+        TriStateBool shared_with_os = 5;
+        TriStateBool read_centric = 6;
+        uint64 kind = 7;
+        PDiskConfig pdisk_config = 8;
+        uint64 guid = 9;
+        uint64 box_id = 10;
+        uint32 num_static_slots = 11;
+        DriveStatus drive_status = 12;
+        uint32 expected_slot_count = 13;
+        PDiskMetrics pdisk_metrics = 14;
+        // TInstant::GetValue()
+        uint64 drive_status_change_timestamp = 15;
+        DecommitStatus decommit_status = 16;
+        string expected_serial = 17;
+        string last_seen_serial = 18;
+    }
+    message VSlot {
+        message DonorDisk {
+            VDiskID vdisk_id = 1;
+            VSlotId vslot_id = 2;
+            VDiskMetrics vdisk_metrics = 3;
+        }
+
+        VSlotId vslot_id = 1;
+        uint32 group_id = 2;
+        uint32 group_generation = 3;
+        string vdisk_kind = 4;
+        uint32 fail_realm_idx = 5;
+        uint32 fail_domain_idx = 6;
+        uint32 vdisk_idx = 7;
+        uint64 allocated_size = 8;
+        VDiskMetrics vdisk_metrics = 9;
+        string status = 10; // textual representation of EVDiskStatus or empty string if status is not known/reported
+        repeated DonorDisk donors = 11;
+        bool ready = 12; // is disk READY in terms of BSC (stable READY status for some period of time)
+        bool read_only = 13;
+    }
+    message VirtualGroupInfo {
+        VirtualGroupState state = 1;
+        string name = 2;
+        uint64 blob_depot_id = 3;
+        string error_reason = 4;
+        GroupDecommitStatus.E decommit_status = 5;
+    }
+    message Group {
+        uint32 group_id = 1;
+        uint32 group_generation = 2;
+        string erasure_species = 3;
+        repeated VSlotId vslot_id = 4;
+        uint64 box_id = 5;
+        uint64 storage_pool_id = 6;
+        bool seen_operational = 7;
+        GroupStatus.E operating_status = 8; // group status based on latest VDisk reports only
+        GroupStatus.E expected_status = 9; // status based not only on operational report, but on PDisk status and plans too
+        VirtualGroupInfo virtual_group_info = 10;
+    }
+    message Node {
+        uint32 node_id = 1;
+        bytes physical_location = 2 [deprecated=true];
+        HostKey host_key = 3;
+        NodeLocation location = 4;
+        uint64 last_connect_timestamp = 5; // TInstant
+        uint64 last_disconnect_timestamp = 6; // TInstant
+        uint64 last_seen_timestamp = 7; // when seen working for the last time
+        NodeType type = 8;
+    }
+    message Device {
+        string serial_number = 1;
+        uint64 box_id = 2;
+        uint32 node_id = 3;
+        uint32 pdisk_id = 4;
+        string path = 5;
+        PDiskType type = 6;
+        uint64 guid = 7;
+        DriveLifeStage.E life_stage = 8;
+    }
+    repeated PDisk pdisk = 1;
+    repeated VSlot vslot = 2;
+    repeated Group group = 3;
+    repeated Node node = 4;
+    repeated Device device = 5;
+    UpdateSettings settings = 6;
+}
+
+message PDiskStat {
+    uint32 node_id = 1;
+    uint32 pdisk_id = 2;
+    string fqdn = 3;
+    int32 ic_port = 4;
+    string path = 5;
+    uint32 num_slots_after_migration = 6;
+}
+
+message ReassignedItem {
+    VDiskID vdisk_id = 1;
+    VSlotId from = 2;
+    VSlotId to = 3;
+    string from_fqdn = 4;
+    string from_path = 5;
+    string to_fqdn = 6;
+    string to_path = 7;
+}
+
+message DriveInfo {
+    message Drive {
+        // path to the device on the host node
+        string path = 1;
+        // drive type (rotational or solid state)
+        PDiskType type = 2;
+    }
+    // fully qualified domain name of the host
+    string fqdn = 1;
+    // interconnect port to use
+    int32 port = 2;
+    // may be set instead of Fqdn/IcPort to specify explicit NodeId
+    uint32 node_id = 3;
+    repeated Drive drive = 4;
+}
+
+message InitRequest {
+    Ydb.Operations.OperationParams operation_params = 1;
+    repeated DriveInfo drive_info = 2;
+}
+
+message InitResponse {
+    Ydb.Operations.Operation operation = 1;
+}
+
+message InitResult {
+}
