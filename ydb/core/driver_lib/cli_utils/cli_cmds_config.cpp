@@ -1,7 +1,9 @@
 #include <ydb/core/protos/blobstorage.pb.h>
 #include <ydb/core/protos/config.pb.h>
 #include <ydb/core/protos/blobstorage_config.pb.h>
+#include <ydb/public/api/protos/ydb_bsconfig.pb.h>
 #include <ydb/library/yaml_config/yaml_config_parser.h>
+#include <ydb/public/api/grpc/ydb_bsconfig_v1.grpc.pb.h>
 #include "cli.h"
 #include "cli_cmds.h"
 #include "proto_common.h"
@@ -148,6 +150,96 @@ public:
     }
 };
 
+class TDefine : public TClientCommand {
+    TString YamlFile;
+public:
+    TDefine()
+        : TClientCommand("define", {}, "Define storage config using yaml description")
+    {}
+
+    void Config(TConfig& config) override {
+        TClientCommand::Config(config);
+
+        config.Opts->AddLongOption("yaml-file", "read storage config from yaml file")
+            .Required()
+            .RequiredArgument("PATH")
+            .StoreResult(&YamlFile);
+    }
+
+    int Run(TConfig& config) override {
+        TString data;
+
+        try {
+            data = TUnbufferedFileInput(YamlFile).ReadAll();
+        } catch (const yexception& ex) {
+            Cerr << "failed to read config from file: " << ex.what() << Endl;
+            return EXIT_FAILURE;
+        }
+        std::unique_ptr<Ydb::BSConfig::V1::BSConfigService::Stub> stub;
+        std::shared_ptr<grpc::Channel> channel;
+
+        channel = grpc::CreateChannel("localhost:2135", grpc::InsecureChannelCredentials());
+        stub = Ydb::BSConfig::V1::BSConfigService::NewStub(channel);
+        Ydb::BSConfig::DefineRequest defineRequest = NKikimr::NYaml::BuildDefineDistributedStorageCommand(data);
+
+        grpc::ClientContext defineCtx;
+        defineCtx.AddMetadata(NYdb::YDB_AUTH_TICKET_HEADER, "root@builtin");
+        Ydb::BSConfig::DefineResponse defineResponse;
+        stub->Define(&defineCtx, defineRequest, &defineResponse);
+        if (defineResponse.operation().status() == Ydb::StatusIds::SUCCESS) {
+            Ydb::BSConfig::DefineResult defineResult;
+            defineResponse.operation().result().UnpackTo(&defineResult);
+            TString data;
+            if (google::protobuf::TextFormat::PrintToString(defineResult, &data)) {
+                Cout << data;
+            } else {
+                Cerr << "failed to print protobuf" << Endl;
+                return EXIT_FAILURE;
+            }
+            return 0;
+        }
+        return 1;
+    }
+};
+
+class TFetch : public TClientCommand {
+
+public:
+    TFetch()
+        : TClientCommand("fetch", {}, "Fetch yaml config similar to the init config")
+    {}
+
+    void Config(TConfig& config) override {
+        TClientCommand::Config(config);
+    }
+
+    int Run(TConfig& config) override {
+        std::unique_ptr<Ydb::BSConfig::V1::BSConfigService::Stub> stub;
+        std::shared_ptr<grpc::Channel> channel;
+
+        channel = grpc::CreateChannel("localhost:2135", grpc::InsecureChannelCredentials());
+        stub = Ydb::BSConfig::V1::BSConfigService::NewStub(channel);
+        Ydb::BSConfig::FetchRequest fetchRequest;
+
+        grpc::ClientContext fetchCtx;
+        fetchCtx.AddMetadata(NYdb::YDB_AUTH_TICKET_HEADER, "root@builtin");
+        Ydb::BSConfig::FetchResponse fetchResponse;
+        stub->Fetch(&fetchCtx, fetchRequest, &fetchResponse);
+        if (fetchResponse.operation().status() == Ydb::StatusIds::SUCCESS) {
+            Ydb::BSConfig::FetchResult fetchResult;
+            fetchResponse.operation().result().UnpackTo(&fetchResult);
+            TString data;
+            if (google::protobuf::TextFormat::PrintToString(fetchResult, &data)) {
+                Cout << data;
+            } else {
+                Cerr << "failed to print protobuf" << Endl;
+                return EXIT_FAILURE;
+            }
+            return 0;
+        }
+        return 1;
+    }
+};
 
 class TInvoke : public TClientCommand {
     ui32 AvailabilityDomain = 1;
@@ -255,6 +347,7 @@ public:
         AddCommand(std::make_unique<TPropose>());
         AddCommand(std::make_unique<TInvoke>());
         AddCommand(std::make_unique<TInit>());
+        AddCommand(std::make_unique<TDefine>());
     }
 };
 
