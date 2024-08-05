@@ -19,16 +19,16 @@ struct TDriveDevice {
     TString path;
     NKikimrBlobStorage::EPDiskType type;
 
-    bool operator<(const TDriveDevice& other) const {
-        return std::tie(path, type) < std::tie(other.path, other.type);
-    }
-
     auto operator<=>(const TDriveDevice &) const = default;
 };
 
 template <typename TResult>
-Ydb::StatusIds::StatusCode PullStatus(const TResult& /*status*/) {
-    return Ydb::StatusIds::SUCCESS;
+Ydb::StatusIds::StatusCode PullStatus(const TResult& result) {
+    auto response = result.GetResponse();
+    if (response.GetSuccess()) {
+        return Ydb::StatusIds::SUCCESS;
+    }
+    return Ydb::StatusIds::INTERNAL_ERROR;
 }
 
 }
@@ -77,6 +77,7 @@ private:
 
 
 void CopyToConfigRequest(const Ydb::BSConfig::InitRequest &from, NKikimrBlobStorage::TConfigRequest *to);
+void CopyFromConfigResponse(const NKikimrBlobStorage::TConfigResponse &/*from*/, Ydb::BSConfig::InitResult */*to*/);
 
 template <typename TDerived>
 class TBaseBSConfigRequest {
@@ -184,7 +185,7 @@ protected:
             }
         }
         TResultRecord result;
-        //CopyProtobuf(ev->Get()->Record, &result);
+        CopyFromConfigResponse(ev->Get()->Record.GetResponse(), &result);
         this->ReplyWithResult(status, result, TActivationContext::AsActorContext());
     }
 

@@ -43,11 +43,14 @@ void CopyToConfigRequest(const Ydb::BSConfig::InitRequest &from, NKikimrBlobStor
         }
 
         auto *host = defineBox->AddHost();
-        host->MutableKey()->SetNodeId(driveInfo.node_id());
         host->MutableKey()->SetFqdn(driveInfo.fqdn());
         host->MutableKey()->SetIcPort(driveInfo.port());
+        host->SetEnforcedNodeId(driveInfo.node_id());
         host->SetHostConfigId(hostConfigMap[driveSet]);
     }
+}
+
+void CopyFromConfigResponse(const NKikimrBlobStorage::TConfigResponse &/*from*/, Ydb::BSConfig::InitResult */*to*/) {
 }
 
 class TInitRequest : public TBSConfigRequestGrpc<TInitRequest, TEvInitRequest, Ydb::BSConfig::InitResult> {
