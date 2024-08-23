@@ -8,114 +8,106 @@
 
 namespace NKikimr::NGRpcService {
 
-using TEvDefineRequest =
-    TGrpcRequestOperationCall<Ydb::BSConfig::DefineRequest,
-        Ydb::BSConfig::DefineResponse>;
-using TEvFetchRequest =
-    TGrpcRequestOperationCall<Ydb::BSConfig::FetchRequest,
-        Ydb::BSConfig::FetchResponse>;
+using TEvDefineStorageConfigRequest =
+    TGrpcRequestOperationCall<Ydb::BSConfig::DefineStorageConfigRequest,
+        Ydb::BSConfig::DefineStorageConfigResponse>;
+using TEvFetchStorageConfigRequest =
+    TGrpcRequestOperationCall<Ydb::BSConfig::FetchStorageConfigRequest,
+        Ydb::BSConfig::FetchStorageConfigResponse>;
 
 using namespace NActors;
 using namespace Ydb;
 
-bool CopyToConfigRequest(const Ydb::BSConfig::DefineRequest &from, NKikimrBlobStorage::TConfigRequest *to) {
-    THashMap<TDriveDeviceSet, ui64> hostConfigMap;
-    THashSet<TString> uniquePaths;
-    THashSet<TString> uniqueHostIds; // fqdn:port
-    ui64 hostConfigId = 0;
-    NKikimrBlobStorage::TConfigRequest::TCommand defineBoxCommand;
-    auto *defineBox = defineBoxCommand.MutableDefineBox();
+bool CopyToConfigRequest(const Ydb::BSConfig::DefineStorageConfigRequest &from, NKikimrBlobStorage::TConfigRequest *to) {
+    auto& storageConfig = from.storage_config();
+    for (const auto& hostConfig: storageConfig.host_config()) {
+        auto *defineHostConfig = to->AddCommand()->MutableDefineHostConfig();
+        defineHostConfig.SetHostConfigId(hostConfig.host_config_id());
+        for (const auto& drive: hostConfig.drive()) {
+            auto *newDrive = defineHostConfig.AddDrive();
+            newDrive.SetPath(drive.path());
+            newDrive.SetType(static_cast<decltype(newDrive.GetType())>(drive.type()));
+            newDrive.SetSharedWithOs(drive.shared_with_os());
+            newDrive.SetReadCentric(drive.read_centric());
+            newDrive.SetKind(drive.kind());
+            newDrive.MutablePDiskConfig()->SetExpectedSlotCount(drive.expected_slot_count());
+        }
+        defineHostConfig.SetItemConfigGeneration(storageConfig.item_config_generation());
+    }
+    auto *defineBox = to->AddCommand()->MutableDefineBox();
     defineBox->SetBoxId(1);
     defineBox->SetItemConfigGeneration(from.item_config_generation());
-    for (const auto& driveInfo: from.drive_info()) {
-        TString hostId;
-        if (driveInfo.has_node_id()) {
-            hostId = ToString(driveInfo.node_id());
+    for (const auto& host: storageConfig.host()) {
+        auto *newHost = defineBox.AddHost();
+        newHost->SetHostConfigId(host.host_config_id());
+        auto *newHostKey = newHost->MutableHostKey();
+        auto& hostKey = host.host_key();
+        if (hostKey.has_node_id()) {
+            newHostKey->SetNodeId(hostKey.node_id());
         }
         else {
-            auto& host = driveInfo.host();
-            hostId = ToString(host.fqdn()) + ":" + ToString(host.port());
+            newHostKey->SetFqdn(hostKey.endpoint().fqdn());
+            newHostKey->SetIcPort(hostKey.endpoint().ic_port());
         }
-        if (uniqueHostIds.find(hostId) != uniqueHostIds.end()) {
-            return false;
-        }
-        uniqueHostIds.insert(hostId);
-        TDriveDeviceSet driveSet;
-
-        for (const auto& drive: driveInfo.drive()) {
-            if (uniquePaths.find(drive.path()) != uniquePaths.end()) {
-                return false;
-            }
-            uniquePaths.insert(drive.path());
-            TDriveDevice device{drive.path(), static_cast<NKikimrBlobStorage::EPDiskType>(drive.type())};
-            driveSet.AddDevice(device);
-        }
-
-        auto it = hostConfigMap.find(driveSet);
-        if (it == hostConfigMap.end()) {
-            auto *hostConfig = to->AddCommand()->MutableDefineHostConfig();
-            hostConfig->SetHostConfigId(++hostConfigId);
-
-            for (const auto& device: driveSet.GetDevices()) {
-                auto *hostConfigDrive = hostConfig->AddDrive();
-                hostConfigDrive->SetPath(device.GetPath());
-                hostConfigDrive->SetType(static_cast<decltype(hostConfigDrive->GetType())>(device.GetType()));
-            }
-            hostConfig->SetItemConfigGeneration(from.item_config_generation());
-            it = hostConfigMap.emplace(driveSet, hostConfigId).first;
-        }
-
-        auto *host = defineBox->AddHost();
-        auto& inputHost = driveInfo.host();
-        host->MutableKey()->SetNodeId(driveInfo.node_id());
-        host->MutableKey()->SetFqdn(inputHost.fqdn());
-        host->MutableKey()->SetIcPort(inputHost.port());
-        host->SetHostConfigId(it->second);
     }
-    *to->AddCommand() = std::move(defineBoxCommand);
     return true;
 }
 
-void CopyFromConfigResponse(const NKikimrBlobStorage::TConfigResponse &/*from*/, Ydb::BSConfig::DefineResult */*to*/) {
+void CopyFromConfigResponse(const NKikimrBlobStorage::TConfigResponse &/*from*/, Ydb::BSConfig::DefineStorageConfigResult */*to*/) {
 }
 
-bool CopyToConfigRequest(const Ydb::BSConfig::FetchRequest &from, NKikimrBlobStorage::TConfigRequest *to) {
+bool CopyToConfigRequest(const Ydb::BSConfig::FetchStorageConfigRequest &from, NKikimrBlobStorage::TConfigRequest *to) {
     to->AddCommand()->MutableReadHostConfig();
     to->AddCommand()->MutableReadBox();
     return true;
 }
 
-void CopyFromConfigResponse(const NKikimrBlobStorage::TConfigResponse &from, Ydb::BSConfig::FetchResult *to) {
-    auto hostConfigStatus = from.GetStatus()[0];
-    auto boxStatus = from.GetStatus()[1];
-    THashMap<ui64, TDriveDeviceSet> hostConfigMap;
-    for (const auto& hostConfig: hostConfigStatus.GetHostConfig()) {
-        TDriveDeviceSet driveDeviceSet;
-        for (const auto& drive: hostConfig.GetDrive()) {
-            driveDeviceSet.AddDevice({drive.GetPath(), drive.GetType()});
+void CopyFromConfigResponse(const NKikimrBlobStorage::TConfigResponse &from, Ydb::BSConfig::FetchStorageConfigResult *to) {
+    auto HostConfigStatus = from.GetStatus()[0];
+    auto Box = from.GetStatus()[1];
+    auto *storageConfig = to->mutable_storage_config();
+    for (const auto& hostConfig: HostConfigStatus.GetHostConfig()) {
+        if (command.has_define_host_config()) {
+            auto& defineHostConfig = command.define_host_config();
+            auto *hostConfig = storageConfig.add_host_config();
+            hostConfig->set_host_config_id(defineHostConfig.host_config_id());
+            for (const auto& drive : defineHostConfig.drive()) {
+                auto *newDrive = hostConfig->add_drive();
+                newDrive->set_path(drive.path());
+                newDrive->set_type(drive.type());
+                newDrive->set_shared_with_os(drive.shared_with_os());
+                newDrive->set_read_centric(drive.read_centric());
+                newDrive->set_kind(drive.kind());
+                newDrive->mutable_pdisk_config()->set_expected_slot_count(drive.pdisk_config().expected_slot_count());
+            }
+            storageConfig.set_item_config_generation(defineHostConfig.item_config_generation());
         }
-        hostConfigMap[hostConfig.GetHostConfigId()] = std::move(driveDeviceSet);
-    }
-    auto box = boxStatus.GetBox()[0];
-    to->set_item_config_generation(box.GetItemConfigGeneration());
-    for (const auto& host: box.GetHost()) {
-        auto *driveInfo = to->add_drive_info();
-        auto *hostDriveInfo = driveInfo->mutable_host(); 
-        auto& key = host.GetKey();
-        hostDriveInfo->set_fqdn(key.GetFqdn());
-        hostDriveInfo->set_port(key.GetIcPort());
-        TDriveDeviceSet driveDevice = hostConfigMap[host.GetHostConfigId()];
-        for (const auto& drive: driveDevice.GetDevices()) {
-            auto* newDrive = driveInfo->add_drive();
-            newDrive->set_path(drive.GetPath());
-            newDrive->set_type(static_cast<Ydb::BSConfig::PDiskType>(drive.GetType()));
+        else if (command.has_define_box()) {
+            auto& defineBox = command.define_box();
+            to->set_item_config_generation(defineBox.item_config_generation());
+            for (const auto& host : defineBox.host()) {
+                auto *newHost = storageConfig.add_host();
+                newHost->set_host_config_id(host.host_config_id());
+                auto *newHostKey = newHost->mutable_host_key();
+                const auto& hostKey = host.host_key();
+                if (hostKey.has_node_id()) {
+                    newHostKey->set_node_id(hostKey.node_id());
+                }
+                else {
+                    auto *endpoint = newHostKey->mutable_endpoint();
+                    endpoint->set_fqdn(hostKey.endpoint().fqdn());
+                    endpoint->set_ic_port(hostKey.endpoint().ic_port());
+                }
+            }
         }
     }
+
 }
 
-class TDefineRequest : public TBSConfigRequestGrpc<TDefineRequest, TEvDefineRequest, Ydb::BSConfig::DefineResult> {
+class TDefineStorageConfigRequest : public TBSConfigRequestGrpc<TDefineStorageConfigRequest, TEvDefineStorageConfigRequest,
+    Ydb::BSConfig::DefineStorageConfigResult> {
 public:
-    using TBase = TBSConfigRequestGrpc<TDefineRequest, TEvDefineRequest, Ydb::BSConfig::DefineResult>;
+    using TBase = TBSConfigRequestGrpc<TDefineStorageConfigRequest, TEvDefineStorageConfigRequest, Ydb::BSConfig::DefineStorageConfigResult>;
     using TBase::TBase;
 
     bool ValidateRequest(Ydb::StatusIds::StatusCode& /*status*/, NYql::TIssues& /*issues*/) override {
@@ -126,9 +118,10 @@ public:
     }
 };
 
-class TFetchRequest : public TBSConfigRequestGrpc<TFetchRequest, TEvFetchRequest, Ydb::BSConfig::FetchResult> {
+class TFetchStorageConfigRequest : public TBSConfigRequestGrpc<TFetchStorageConfigRequest, TEvFetchStorageConfigRequest,
+    Ydb::BSConfig::FetchStorageConfigResult> {
 public:
-    using TBase = TBSConfigRequestGrpc<TFetchRequest, TEvFetchRequest, Ydb::BSConfig::FetchResult>;
+    using TBase = TBSConfigRequestGrpc<TFetchStorageConfigRequest, TEvFetchStorageConfigRequest, Ydb::BSConfig::FetchStorageConfigResult>;
     using TBase::TBase;
 
     bool ValidateRequest(Ydb::StatusIds::StatusCode& /*status*/, NYql::TIssues& /*issues*/) override {
@@ -139,12 +132,12 @@ public:
     }
 };
 
-void DoDefineBSConfig(std::unique_ptr<IRequestOpCtx> p, const IFacilityProvider&) {
-    TActivationContext::AsActorContext().Register(new TDefineRequest(p.release()));
+void DoDefineStorageConfigBSConfig(std::unique_ptr<IRequestOpCtx> p, const IFacilityProvider&) {
+    TActivationContext::AsActorContext().Register(new TDefineStorageConfigRequest(p.release()));
 }
 
-void DoFetchBSConfig(std::unique_ptr<IRequestOpCtx> p, const IFacilityProvider&) {
-    TActivationContext::AsActorContext().Register(new TFetchRequest(p.release()));
+void DoFetchStorageConfigBSConfig(std::unique_ptr<IRequestOpCtx> p, const IFacilityProvider&) {
+    TActivationContext::AsActorContext().Register(new TFetchStorageConfigRequest(p.release()));
 }
 
 

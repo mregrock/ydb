@@ -180,7 +180,7 @@ public:
 
         channel = grpc::CreateChannel("localhost:2135", grpc::InsecureChannelCredentials());
         stub = Ydb::BSConfig::V1::BSConfigService::NewStub(channel);
-        Ydb::BSConfig::DefineRequest defineRequest = NKikimr::NYaml::BuildDefineDistributedStorageCommand(data);
+        Ydb::BSConfig::DefineStorageConfigRequest defineRequest = NKikimr::NYaml::BuildDefineDistributedStorageCommand(data);
 
         grpc::ClientContext defineCtx;
         defineCtx.AddMetadata(NYdb::YDB_AUTH_TICKET_HEADER, "root@builtin");

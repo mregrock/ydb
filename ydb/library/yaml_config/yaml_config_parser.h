@@ -54,7 +54,7 @@ namespace NKikimr::NYaml {
         TSimpleSharedPtr<NProtobufJson::IUnknownFieldsCollector> unknownFieldsCollector = nullptr);
 
     NKikimrBlobStorage::TConfigRequest BuildInitDistributedStorageCommand(const TString& data);
-    Ydb::BSConfig::DefineRequest BuildDefineDistributedStorageCommand(const TString& data);
+    Ydb::BSConfig::DefineStorageConfigRequest BuildDefineDistributedStorageCommand(const TString& data);
 
     void ExtractExtraFields(NJson::TJsonValue& json, TTransformContext& ctx);
     void ClearEphemeralFields(NJson::TJsonValue& json);

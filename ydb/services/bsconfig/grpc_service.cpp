@@ -66,8 +66,8 @@ void TBSConfigGRpcService::SetupIncomingRequests(NYdbGrpc::TLoggerPtr logger) {
         getCounterBlock("BSConfig", Y_STRINGIZE(methodName))                                             \
     )->Run()
 
-    SETUP_METHOD(Define, DoDefineBSConfig, Rps, BSCONFIG_DEFINE);
-    SETUP_METHOD(Fetch, DoFetchBSConfig, Rps, BSCONFIG_FETCH);
+    SETUP_METHOD(DefineStorageConfig, DoDefineStorageConfigBSConfig, Rps, BSCONFIG_DEFINE_STORAGE_CONFIG);
+    SETUP_METHOD(FetchStorageConfig, DoFetchStorageConfigBSConfig, Rps, BSCONFIG_FETCH_STORAGE_CONFIG);
 
 #undef SETUP_METHOD
 }

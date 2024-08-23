@@ -1431,10 +1431,10 @@ namespace NKikimr::NYaml {
         return result;
     }
 
-    Ydb::BSConfig::DefineRequest BuildDefineDistributedStorageCommand(const TString& data) {
+    Ydb::BSConfig::DefineStorageConfigRequest BuildDefineDistributedStorageCommand(const TString& data) {
         auto yamlNode = YAML::Load(data);
         NJson::TJsonValue defineJson = Yaml2Json(yamlNode, true);
-        Ydb::BSConfig::DefineRequest defineRequest;
+        Ydb::BSConfig::DefineStorageConfigRequest defineRequest;
         NProtobufJson::MergeJson2Proto(defineJson, defineRequest, GetJsonToProtoConfig());
         return defineRequest;
     }
