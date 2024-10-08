@@ -164,7 +164,7 @@ message TPDiskInfo {
     optional uint64 AvailableSize = 8;
     optional uint64 TotalSize = 9;
     reserved 10;
-    reserved 11;
+    optional string State = 11;
     optional string StatusV2 = 12;
     optional uint64 StatusChangeTimestamp = 13;
     optional uint64 EnforcedDynamicSlotSize = 14;
@@ -209,11 +209,12 @@ message TVSlotInfo {
     optional uint32 VDisk = 6;
     optional uint64 AllocatedSize = 7;
     optional uint64 AvailableSize = 8;
-    reserved 9;
-    reserved 10;
+    optional bool Replicated = 9;
+    optional string State = 10;
     optional string StatusV2 = 12;
     optional string Kind = 13;
     optional bool IsBeingDeleted = 14;
+    optional string DiskSpace = 15;
     // metrics ?
 }
 

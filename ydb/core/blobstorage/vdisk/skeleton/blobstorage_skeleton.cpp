@@ -16,6 +16,7 @@
 #include "skeleton_capturevdisklayout.h"
 #include "skeleton_compactionstate.h"
 #include "skeleton_block_and_get.h"
+#include "ydb/core/blobstorage/vdisk/common/vdisk_mongroups.h"
 #include <ydb/core/base/feature_flags.h>
 #include <ydb/core/blobstorage/groupinfo/blobstorage_groupinfo_iter.h>
 #include <ydb/core/blobstorage/vdisk/localrecovery/localrecovery_public.h>
@@ -77,6 +78,12 @@ namespace NKikimr {
             NKikimrWhiteboard::TVDiskSatisfactionRank satisfactionRank;
             TOverloadHandler::ToWhiteboard(OverloadHandler.get(), satisfactionRank);
             // send a message to Whiteboard
+            // skeleton state
+            const auto state = VDiskMonGroup.VDiskState();
+            // replicated?
+            bool replicated = !ReplMonGroup.ReplUnreplicatedVDisks() && !HasUnreadableBlobs;
+            // out of space
+            const auto outOfSpaceFlags = VCtx->GetOutOfSpaceState().LocalWhiteboardFlag();
             auto ev = std::make_unique<NNodeWhiteboard::TEvWhiteboard::TEvVDiskStateUpdate>(&satisfactionRank);
             const TInstant now = ctx.Now();
             const TInstant prev = std::exchange(WhiteboardUpdateTimestamp, now);
@@ -93,10 +100,13 @@ namespace NKikimr {
             ctx.Send(NodeWardenServiceId,
                      new TEvBlobStorage::TEvControllerUpdateDiskStatus(
                          SelfVDiskId,
-                         OverloadHandler ? OverloadHandler->GetIntegralRankPercent() : 0,
                          SelfId().NodeId(),
                          Config->BaseInfo.PDiskId,
-                         Config->BaseInfo.VDiskSlotId));
+                         Config->BaseInfo.VDiskSlotId,
+                         OverloadHandler ? OverloadHandler->GetIntegralRankPercent() : 0,
+                         state,
+                         replicated,
+                         outOfSpaceFlags));
             // repeat later
             ctx.Schedule(Config->WhiteboardUpdateInterval, new TEvTimeToUpdateWhiteboard());
         }
@@ -2814,6 +2824,7 @@ namespace NKikimr {
             , SelfVDiskId(GInfo->GetVDiskId(VCtx->ShortSelfVDisk))
             , Arena(std::make_shared<TRopeArena>(&TRopeArenaBackend::Allocate))
             , VDiskMonGroup(VCtx->VDiskCounters, "subsystem", "state")
+            , ReplMonGroup(VCtx->VDiskCounters, "subsystem", "state")
             , SyncLogIFaceGroup(VCtx->VDiskCounters, "subsystem", "synclog")
             , IFaceMonGroup(std::make_shared<NMonGroup::TVDiskIFaceGroup>(
                 VCtx->VDiskCounters, "subsystem", "interface"))
@@ -2860,6 +2871,7 @@ namespace NKikimr {
         bool LocalDbInitialized = false;
         std::shared_ptr<TRopeArena> Arena;
         NMonGroup::TVDiskStateGroup VDiskMonGroup;
+        NMonGroup::TReplGroup ReplMonGroup;
         NMonGroup::TSyncLogIFaceGroup SyncLogIFaceGroup;
         std::shared_ptr<NMonGroup::TVDiskIFaceGroup> IFaceMonGroup;
         bool ReplDone = false;
