@@ -51,7 +51,15 @@
     .general-tag {
       background-color: #daab83;
     }
-  
+
+    .static_parameter-tag {
+      background-color: #83adda;
+    }
+
+    .dynamic_parameter-tag {
+      background-color: #e8b4bf;
+    }
+
   }
   
   .g-root_theme_dark  {
@@ -85,5 +93,13 @@
     .general-tag {
       background-color: #daab83;
     }
-    
+
+    .static_parameter-tag {
+      background-color: #83adda;
+    }
+
+    .dynamic_parameter-tag {
+      background-color: #e8b4bf;
+    }
+ 
   }

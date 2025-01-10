@@ -1,0 +1,7 @@
+items:
+- name: Миграция на динамическую конфигурацию
+  href: migration-to-dynconfig.md
+- name: Миграция на автоматическую конфигурацию
+  href: migration-to-autoconfiguration.md
+- name: Миграция на ручную конфигурацию
+  href: migration-to-manual-configuration.md
