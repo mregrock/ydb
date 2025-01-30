@@ -2222,6 +2222,8 @@ message TAppConfig {
 
     optional TConfigVersion Version = 102;
     repeated TLabel Labels = 103;
+
+    optional string AutoConfigDir = 104;
 }
 
 message TYdbVersion {

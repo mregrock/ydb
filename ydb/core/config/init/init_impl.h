@@ -329,6 +329,7 @@ struct TCommonAppOptions {
     TString PathToInterconnectPrivateKeyFile;
     TString PathToInterconnectCaFile;
     TString YamlConfigFile;
+    TString AutoConfigDir;
     bool SysLogEnabled = false;
     bool TcpEnabled = false;
     bool SuppressVersionCheck = false;
@@ -423,6 +424,7 @@ struct TCommonAppOptions {
         opts.AddLongOption("body", "body name (used to describe dynamic node location)")
             .RequiredArgument("NUM").StoreResult(&Body);
         opts.AddLongOption("yaml-config", "Yaml config").OptionalArgument("PATH").StoreResult(&YamlConfigFile);
+        opts.AddLongOption("auto-conf-dir", "Directory to store Yaml config").RequiredArgument("PATH").StoreResult(&AutoConfigDir);
 
         opts.AddLongOption("tiny-mode", "Start in a tiny mode")
             .NoArgument().SetFlag(&TinyMode);
@@ -1058,7 +1060,14 @@ public:
 
         Option("auth-file", TCfg::TAuthConfigFieldTag{});
         LoadBootstrapConfig(ProtoConfigFileProvider, ErrorCollector, freeArgs, BaseConfig);
-        LoadYamlConfig(refs, CommonAppOptions.YamlConfigFile, AppConfig);
+
+        TString yamlConfigFile = CommonAppOptions.YamlConfigFile;
+        if (!CommonAppOptions.AutoConfigDir.empty()) {
+            yamlConfigFile = CommonAppOptions.AutoConfigDir + "/config.yaml";
+            AppConfig.SetAutoConfigDir(CommonAppOptions.AutoConfigDir);
+        }
+
+        LoadYamlConfig(refs, yamlConfigFile, AppConfig);
         OptionMerge("auth-token-file", TCfg::TAuthConfigFieldTag{});
 
         // start memorylog as soon as possible
@@ -1080,7 +1089,7 @@ public:
             InitDynamicNode();
         }
 
-        LoadYamlConfig(refs, CommonAppOptions.YamlConfigFile, AppConfig);
+        LoadYamlConfig(refs, yamlConfigFile, AppConfig);
 
         Option("sys-file", TCfg::TActorSystemConfigFieldTag{});
 
