@@ -56,11 +56,6 @@ void TSchemeShard::TIndexBuilder::TTxBase::ApplySchedule(const TActorContext& ct
     }
 }
 
-ui64 TSchemeShard::TIndexBuilder::TTxBase::RequestUnits(const TBillingStats& stats) {
-    return TRUCalculator::ReadTable(stats.GetReadBytes())
-         + TRUCalculator::BulkUpsert(stats.GetUploadBytes(), stats.GetUploadRows());
-}
-
 void TSchemeShard::TIndexBuilder::TTxBase::RoundPeriod(TInstant& start, TInstant& end) {
     if (start.Hours() == end.Hours()) {
         return; // that is OK
@@ -123,7 +118,7 @@ void TSchemeShard::TIndexBuilder::TTxBase::ApplyBill(NTabletFlatExecutor::TTrans
         }
 
         if (!cloud_id || !folder_id || !database_id) {
-            LOG_N("ApplyBill: unable to make a bill, neither cloud_id and nor folder_id nor database_id have found in user attributes at the domain"
+            LOG_I("ApplyBill: unable to make a bill, neither cloud_id and nor folder_id nor database_id have found in user attributes at the domain"
                   << ", build index operation: " << buildId
                   << ", domain: " << domain.PathString()
                   << ", domainId: " << buildInfo.DomainPathId
@@ -133,7 +128,7 @@ void TSchemeShard::TIndexBuilder::TTxBase::ApplyBill(NTabletFlatExecutor::TTrans
         }
 
         if (!Self->IsServerlessDomain(domain)) {
-            LOG_N("ApplyBill: unable to make a bill, domain is not a serverless db"
+            LOG_I("ApplyBill: unable to make a bill, domain is not a serverless db"
                   << ", build index operation: " << buildId
                   << ", domain: " << domain.PathString()
                   << ", domainId: " << buildInfo.DomainPathId
@@ -157,7 +152,7 @@ void TSchemeShard::TIndexBuilder::TTxBase::ApplyBill(NTabletFlatExecutor::TTrans
         billed += toBill;
         Self->PersistBuildIndexBilled(db, buildInfo);
 
-        ui64 requestUnits = RequestUnits(toBill);
+        ui64 requestUnits = TRUCalculator::Calculate(toBill);
 
         const TString billRecord = TBillRecord()
             .Id(id)
@@ -197,8 +192,8 @@ void TSchemeShard::TIndexBuilder::TTxBase::Progress(TIndexBuildId id) {
 
 void TSchemeShard::TIndexBuilder::TTxBase::Fill(NKikimrIndexBuilder::TIndexBuild& index, const TIndexBuildInfo& indexInfo) {
     index.SetId(ui64(indexInfo.Id));
-    if (indexInfo.Issue) {
-        AddIssue(index.MutableIssues(), indexInfo.Issue);
+    if (indexInfo.GetIssue()) {
+        AddIssue(index.MutableIssues(), indexInfo.GetIssue());
     }
     if (indexInfo.StartTime != TInstant::Zero()) {
         *index.MutableStartTime() = SecondsToProtoTimeStamp(indexInfo.StartTime.Seconds());

@@ -258,7 +258,7 @@ TProgramPtr TProgramFactory::Create(
     auto udfResolver = UdfResolver_;
 
     if (UdfResolverLogfile_) {
-        udfResolver = NCommon::CreateUdfResolverDecoratorWithLogger(udfResolver, *UdfResolverLogfile_, sessionId);
+        udfResolver = NCommon::CreateUdfResolverDecoratorWithLogger(FunctionRegistry_, udfResolver, *UdfResolverLogfile_, sessionId);
     }
 
     if (udfIndex) {
@@ -1989,6 +1989,7 @@ TTypeAnnotationContextPtr TProgram::BuildTypeAnnotationContext(const TString& us
     auto typeAnnotationContext = MakeIntrusive<TTypeAnnotationContext>();
 
     typeAnnotationContext->LangVer = LangVer_;
+    typeAnnotationContext->UseTypeDiffForConvertToError = true;
     typeAnnotationContext->UserDataStorage = UserDataStorage_;
     typeAnnotationContext->Credentials = Credentials_;
     typeAnnotationContext->Modules = Modules_;
