@@ -70,7 +70,7 @@ def fetch_config(config_client):
 
 
 class TestConfigMigrationToV2(object):
-    erasure = Erasure.BLOCK_4_2
+    erasure = Erasure.MIRROR_3_DC
     separate_node_configs = True
     metadata_section = {
         "kind": "MainConfig",
@@ -80,7 +80,12 @@ class TestConfigMigrationToV2(object):
 
     @classmethod
     def setup_class(cls):
-        nodes_count = 8 if cls.erasure == Erasure.BLOCK_4_2 else 9
+        if cls.erasure == Erasure.BLOCK_4_2:
+            nodes_count = 8
+        elif cls.erasure == Erasure.MIRROR_3_DC:
+            nodes_count = 3
+        else:
+            nodes_count = 9
         log_configs = {
             'BS_NODE': LogLevels.DEBUG,
             'GRPC_SERVER': LogLevels.DEBUG,
@@ -263,6 +268,110 @@ class TestConfigMigrationToV2(object):
 
         # 13 step: remove unnecessary fields
         parsed_fetched_config["config"].pop("domains_config")
+        parsed_fetched_config["config"].pop("blob_storage_config")
+        parsed_fetched_config["config"]["erasure"] = parsed_fetched_config["config"].pop("static_erasure")
+        parsed_fetched_config["metadata"]["version"] = 2
+
+        # 14 step: replace config
+        logger.debug(f"Replacing config: {yaml.dump(parsed_fetched_config)}")
+        replace_config(self.config_client, yaml.dump(parsed_fetched_config))
+
+        self.check_kikimr_is_operational(table_path, tablet_ids)
+
+        # 14* step: restart nodes
+        logger.debug("Restarting nodes")
+        self.cluster.restart_nodes()
+        self.wait_for_all_nodes_start(len(self.cluster.nodes))
+
+        self.check_kikimr_is_operational(table_path, tablet_ids)
+
+    def test_migration_to_v2_with_domains_config(self):
+        table_path = '/Root/mydb/mytable_migration'
+        number_of_tablets = 5
+
+        tablet_ids = create_kv_tablets_and_wait_for_start(
+            self.cluster.client,
+            self.cluster.kv_client,
+            self.swagger_client,
+            number_of_tablets,
+            table_path,
+            timeout_seconds=3
+        )
+
+        # 1 step: fetch config with dynconfig client
+        fetched_config = fetch_config_dynconfig(self.dynconfig_client)
+        if fetched_config is None:
+            logger.info("No config found, generating it")
+            # 2 step: generate config
+            generated_config = generate_config(self.dynconfig_client)
+            parsed_generated_config = yaml.safe_load(generated_config)
+            metadata_section = {
+                "version": 0,
+                "cluster": "",
+                "kind": "MainConfig",
+            }
+            parsed_fetched_config = {
+                "metadata": metadata_section,
+                "config": parsed_generated_config
+            }
+            fetched_config = yaml.dump(parsed_fetched_config)
+            logger.debug(f"Generated config: {fetched_config}")
+
+        # 3 step: add feature flag
+        parsed_fetched_config = yaml.safe_load(fetched_config)
+        parsed_fetched_config["config"]["feature_flags"] = dict()
+        parsed_fetched_config["config"]["feature_flags"]["switch_to_config_v2"] = True
+
+        # 4 step: manually replace config on nodes:
+        self.cluster.overwrite_configs(parsed_fetched_config)
+
+        # 5 step: use config dir
+        self.cluster.enable_config_dir()
+
+        # 6 step: restart nodes
+        self.cluster.restart_nodes()
+        self.wait_for_all_nodes_start(len(self.cluster.nodes))
+
+        self.check_kikimr_is_operational(table_path, tablet_ids)
+
+        logger.debug(f"Replacing config: {yaml.dump(parsed_fetched_config)}")
+        # 7 step: replace config
+        replace_config(self.config_client, yaml.dump(parsed_fetched_config))
+        time.sleep(2)
+
+        # 8 step: fetch config
+        fetched_config = fetch_config(self.config_client)
+        assert_that(fetched_config is not None)
+        logger.debug(f"Fetched config: {fetched_config}")
+        parsed_fetched_config = yaml.safe_load(fetched_config)
+
+        # 9 step: enable self-management
+        parsed_fetched_config["config"]["self_management_config"] = dict()
+        parsed_fetched_config["config"]["self_management_config"]["enabled"] = True
+        parsed_fetched_config["metadata"]["version"] = 1
+
+        # 10 step: replace config
+        logger.debug(f"Replacing config: {yaml.dump(parsed_fetched_config)}")
+        replace_config(self.config_client, yaml.dump(parsed_fetched_config))
+
+        # 11 step: restart nodes
+        logger.debug("Restarting nodes")
+        self.cluster.restart_nodes()
+        self.wait_for_all_nodes_start(len(self.cluster.nodes))
+
+        self.check_kikimr_is_operational(table_path, tablet_ids)
+
+        # 11.5 step: fetch config
+        logger.debug("Fetching config")
+        fetched_config = fetch_config(self.config_client)
+        assert_that(fetched_config is not None)
+        parsed_fetched_config = yaml.safe_load(fetched_config)
+
+        # 12 step: move security_config to root
+        parsed_fetched_config["config"]["security_config"] = parsed_fetched_config["config"]["domains_config"].pop("security_config")
+
+        # 13 step: remove unnecessary fields
+        # parsed_fetched_config["config"].pop("domains_config")
         parsed_fetched_config["config"].pop("blob_storage_config")
         parsed_fetched_config["config"]["erasure"] = parsed_fetched_config["config"].pop("static_erasure")
         parsed_fetched_config["metadata"]["version"] = 2

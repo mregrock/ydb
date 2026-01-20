@@ -897,6 +897,12 @@ class KiKiMR(kikimr_cluster_interface.KiKiMRClusterInterface):
         cmd.DefineStoragePool.VDiskKind = "Default"
         cmd.DefineStoragePool.NumGroups = num_groups
 
+        if str(erasure) == "mirror-3-dc" and len(self.__configurator.all_node_ids()) == 3:
+            cmd.DefineStoragePool.Geometry.RealmLevelBegin = 10
+            cmd.DefineStoragePool.Geometry.RealmLevelEnd = 20
+            cmd.DefineStoragePool.Geometry.DomainLevelBegin = 10
+            cmd.DefineStoragePool.Geometry.DomainLevelEnd = 256
+
         pdisk_filter = cmd.DefineStoragePool.PDiskFilter.add()
         pdisk_filter.Property.add().Type = 0
         pdisk_filter.Property.add().Kind = pdisk_user_kind
