@@ -329,10 +329,9 @@ namespace NKikimr::NBsController {
             }
         };
 
-        bool TBlobStorageController::CommitConfigUpdates(TConfigState& state, bool suppressFailModelChecking,
+        bool TBlobStorageController::ValidateConfigUpdates(TConfigState& state, bool suppressFailModelChecking,
                 bool suppressDegradedGroupsChecking, bool suppressDisintegratedGroupsChecking,
-                TTransactionContext& txc, TString *errorDescription, NKikimrBlobStorage::TConfigResponse *response) {
-            NIceDb::TNiceDb db(txc.DB);
+                TString *errorDescription, NKikimrBlobStorage::TConfigResponse *response) {
 
             // when bridged non-proxy groups get updated, we update parent group too
             THashSet<TGroupId> updates;
@@ -514,6 +513,26 @@ namespace NKikimr::NBsController {
                 state.PDisks.DeleteExistingEntry(pdiskId);
             }
 
+            return true;
+        }
+
+        bool TBlobStorageController::ValidateAndCommitConfigUpdates(TConfigState& state, bool suppressFailModelChecking,
+                bool suppressDegradedGroupsChecking, bool suppressDisintegratedGroupsChecking,
+                TTransactionContext& txc, TString *errorDescription, NKikimrBlobStorage::TConfigResponse *response) {
+            if (!state.Changed()) {
+                return true;
+            }
+            if (!ValidateConfigUpdates(state, suppressFailModelChecking, suppressDegradedGroupsChecking,
+                    suppressDisintegratedGroupsChecking, errorDescription, response)) {
+                return false;
+            }
+            CommitConfigUpdates(state, txc);
+            return true;
+        }
+
+        void TBlobStorageController::CommitConfigUpdates(TConfigState& state, TTransactionContext& txc) {
+            NIceDb::TNiceDb db(txc.DB);
+
             if (state.HostConfigs.Changed()) {
                 MakeTableMerger<Schema::HostConfig>(&HostConfigs, &state.HostConfigs.Get(), this)(txc);
             }
@@ -636,8 +655,6 @@ namespace NKikimr::NBsController {
 
             ScheduleVSlotReadyUpdate();
             UpdateWaitingGroups(groupIds);
-
-            return true;
         }
 
         void TBlobStorageController::CommitSelfHealUpdates(TConfigState& state) {

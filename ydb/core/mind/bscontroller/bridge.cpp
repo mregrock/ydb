@@ -61,7 +61,8 @@ public:
             }
         }
 
-        if (TString error; State->Changed() && !Self->CommitConfigUpdates(*State, true, true, true, txc, &error)) {
+        TString error;
+        if (!Self->ValidateAndCommitConfigUpdates(*State, true, true, true, txc, &error)) {
             State->Rollback();
             State.reset();
         }
@@ -137,7 +138,8 @@ public:
             State->GroupContentChanged.insert(GroupId);
         }
 
-        if (TString error; State->Changed() && !Self->CommitConfigUpdates(*State, true, true, true, txc, &error)) {
+        TString error;
+        if (!Self->ValidateAndCommitConfigUpdates(*State, true, true, true, txc, &error)) {
             State->Rollback();
             State.reset();
         }

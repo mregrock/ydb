@@ -1589,9 +1589,15 @@ private:
     IActor* CreateSystemViewsCollector();
     void UpdateSystemViews();
 
-    bool CommitConfigUpdates(TConfigState& state, bool suppressFailModelChecking, bool suppressDegradedGroupsChecking,
-        bool suppressDisintegratedGroupsChecking, TTransactionContext& txc, TString *errorDescription,
+    bool ValidateConfigUpdates(TConfigState& state, bool suppressFailModelChecking, bool suppressDegradedGroupsChecking,
+        bool suppressDisintegratedGroupsChecking, TString *errorDescription,
         NKikimrBlobStorage::TConfigResponse *response = nullptr);
+
+    bool ValidateAndCommitConfigUpdates(TConfigState& state, bool suppressFailModelChecking,
+        bool suppressDegradedGroupsChecking, bool suppressDisintegratedGroupsChecking, TTransactionContext& txc,
+        TString *errorDescription, NKikimrBlobStorage::TConfigResponse *response = nullptr);
+
+    void CommitConfigUpdates(TConfigState& state, TTransactionContext& txc);
 
     void CommitSelfHealUpdates(TConfigState& state);
     void CommitScrubUpdates(TConfigState& state, TTransactionContext& txc);

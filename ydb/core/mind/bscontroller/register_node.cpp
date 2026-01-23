@@ -176,7 +176,11 @@ public:
         }
 
         TString error;
-        if (!updateIsSuccessful || (State->Changed() && !Self->CommitConfigUpdates(*State, false, false, false, txc, &error))) {
+        bool validated = true;
+        if (updateIsSuccessful) {
+            validated = Self->ValidateAndCommitConfigUpdates(*State, false, false, false, txc, &error);
+        }
+        if (!updateIsSuccessful || !validated) {
             State->Rollback();
             State.reset();
         }
