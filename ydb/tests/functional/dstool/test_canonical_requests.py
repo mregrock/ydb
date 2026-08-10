@@ -40,6 +40,7 @@ CLUSTER_CONFIG = dict(
     static_pdisk_config={'expected_slot_count': 9},
     dynamic_pdisks_config={'expected_slot_count': 9},
     dynamic_storage_pools=[dict(name="dynamic_storage_pool:1", kind="hdd", pdisk_user_kind=0, num_groups=1)],
+    extra_grpc_services=['distributed_storage'],
     additional_log_configs={
         'BS_NODE': LogLevels.DEBUG,
         'BS_CONTROLLER': LogLevels.DEBUG,
@@ -133,7 +134,8 @@ class TestBase:
 
             grpc_calls.append(f'=== Invoke {func} ===')
             for param in params:
-                self._canonize_request(param.Request)
+                if hasattr(param, 'Request'):
+                    self._canonize_request(param.Request)
                 grpc_calls.append(text_format.MessageToString(param, as_one_line=False))
 
             if with_response:
