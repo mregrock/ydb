@@ -640,6 +640,13 @@ message TSetGroupExcludedVDisks {
     NKikimrBlobStorage.TExcludedVDisks ExcludedVDisks = 3;
 }
 
+// Replaces both write layout lists. Omit WritePolicy to restore the default policy.
+message TSetGroupWritePolicy {
+    uint32 GroupId = 1;
+    uint32 GroupGeneration = 2;
+    NKikimrBlobStorage.TGroupWritePolicy WritePolicy = 3;
+}
+
 message TSetGroupSingleDcMode {
     uint32 GroupId = 1;
     uint32 GroupGeneration = 2; // expected generation to prevent updating a stale group configuration
@@ -742,6 +749,7 @@ message TConfigRequest {
             TUpdateStoragePoolSettings UpdateStoragePoolSettings = 63;
             TSetGroupSingleDcMode SetGroupSingleDcMode = 64;
             TSetGroupExcludedVDisks SetGroupExcludedVDisks = 65;
+            TSetGroupWritePolicy SetGroupWritePolicy = 66;
 
             // commands intended for internal use
             TReassignGroupDisk ReassignGroupDisk = 19;
@@ -880,6 +888,7 @@ message TBaseConfig {
         bool EnableSingleDcMode = 14;
         optional uint32 SurvivingDc = 15;
         NKikimrBlobStorage.TExcludedVDisks ExcludedVDisks = 16;
+        NKikimrBlobStorage.TGroupWritePolicy WritePolicy = 17;
     }
     message TNode {
         uint32 NodeId = 1;

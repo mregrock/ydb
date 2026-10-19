@@ -499,7 +499,7 @@ Y_UNIT_TEST_SUITE(BsControllerConfig) {
         checkServiceSet();
     }
 
-    Y_UNIT_TEST(ExcludedVDisksPersistence) {
+    Y_UNIT_TEST(ExcludedVDisksAndWritePolicyPersistence) {
         TEnvironmentSetup env(9, 3);
         bool active = false;
         env.Prepare("excluded-vdisks", [](TTestActorRuntime&) {}, active);
@@ -551,6 +551,49 @@ Y_UNIT_TEST_SUITE(BsControllerConfig) {
         RebootTablet(*env.Runtime, env.TabletId, env.Runtime->AllocateEdgeActor());
         group = query();
         check();
+        auto setPolicy = [&](ui32 generation, const NKikimrBlobStorage::TGroupWritePolicy* policy,
+                bool rollback = false) {
+            NKikimrBlobStorage::TConfigRequest req;
+            req.SetRollback(rollback);
+            auto* cmd = req.AddCommand()->MutableSetGroupWritePolicy();
+            cmd->SetGroupId(group.GetGroupId());
+            cmd->SetGroupGeneration(generation);
+            if (policy) {
+                cmd->MutableWritePolicy()->CopyFrom(*policy);
+            }
+            return env.Invoke(req);
+        };
+        NKikimrBlobStorage::TGroupWritePolicy policy;
+        auto* ok = policy.AddWriteOk();
+        ok->AddPartsPerFailRealm(1);
+        ok->AddPartsPerFailRealm(2);
+        policy.AddWriteOk()->CopyFrom(*ok);
+        auto* durable = policy.AddWriteDurability();
+        for (ui32 i = 0; i < 3; ++i) {
+            durable->AddPartsPerFailRealm(2);
+        }
+        const ui32 policyGeneration = group.GetGroupGeneration();
+        NKikimrBlobStorage::TGroupWritePolicy invalid;
+        UNIT_ASSERT(!setPolicy(policyGeneration, &invalid).GetSuccess());
+        invalid = policy;
+        invalid.MutableWriteDurability(0)->SetPartsPerFailRealm(0, 4);
+        UNIT_ASSERT(!setPolicy(policyGeneration, &invalid).GetSuccess());
+        UNIT_ASSERT(setPolicy(policyGeneration, &policy, true).GetRollbackSuccess());
+        UNIT_ASSERT(!query().HasWritePolicy());
+        UNIT_ASSERT(setPolicy(policyGeneration, &policy).GetSuccess());
+        group = query();
+        UNIT_ASSERT(group.HasWritePolicy());
+        UNIT_ASSERT_VALUES_EQUAL(group.GetGroupGeneration(), policyGeneration + 1);
+        UNIT_ASSERT(!setPolicy(policyGeneration, &policy).GetSuccess());
+        const auto normalized = TBlobStorageGroupInfo::TWritePolicy::Parse(policy)->ToProto();
+        UNIT_ASSERT_VALUES_EQUAL(group.GetWritePolicy().SerializeAsString(), normalized.SerializeAsString());
+        UNIT_ASSERT(setPolicy(group.GetGroupGeneration(), &normalized).GetSuccess());
+        UNIT_ASSERT_VALUES_EQUAL(query().GetGroupGeneration(), group.GetGroupGeneration());
+        RebootTablet(*env.Runtime, env.TabletId, env.Runtime->AllocateEdgeActor());
+        group = query();
+        check();
+        UNIT_ASSERT(group.HasWritePolicy());
+        UNIT_ASSERT_VALUES_EQUAL(group.GetWritePolicy().SerializeAsString(), normalized.SerializeAsString());
         const auto sender = env.Runtime->AllocateEdgeActor(0);
         const auto pipe = env.Runtime->ConnectToPipe(env.TabletId, sender, 0, GetPipeConfigWithRetries());
         const ui32 nodeId = env.Runtime->GetNodeId(0);
@@ -568,13 +611,20 @@ Y_UNIT_TEST_SUITE(BsControllerConfig) {
                 found = true;
                 UNIT_ASSERT_VALUES_EQUAL(info.GetExcludedVDisks().SerializeAsString(),
                     group.GetExcludedVDisks().SerializeAsString());
+                UNIT_ASSERT(info.HasWritePolicy());
+                UNIT_ASSERT_VALUES_EQUAL(info.GetWritePolicy().SerializeAsString(),
+                    group.GetWritePolicy().SerializeAsString());
             }
         }
         UNIT_ASSERT(found);
         env.Runtime->RegisterService(MakeBlobStorageNodeWardenID(nodeId), previousWarden, 0);
+        UNIT_ASSERT(setPolicy(group.GetGroupGeneration(), nullptr).GetSuccess());
+        group = query();
+        UNIT_ASSERT(!group.HasWritePolicy());
         UNIT_ASSERT(set(group.GetGroupGeneration(), {}).GetSuccess());
         RebootTablet(*env.Runtime, env.TabletId, env.Runtime->AllocateEdgeActor());
         UNIT_ASSERT_VALUES_EQUAL(query().GetExcludedVDisks().VDiskOrderNumberSize(), 0);
+        UNIT_ASSERT(!query().HasWritePolicy());
     }
 
     Y_UNIT_TEST(SingleDcModeRejectsUnsupportedGeometry) {

@@ -89,6 +89,8 @@ struct Schema : NIceDb::Schema {
         struct SurvivingDc : Column<19, NScheme::NTypeIds::Uint32> {};
         struct ExcludedVDisks : Column<20, NScheme::NTypeIds::String> { using Type = NKikimrBlobStorage::TExcludedVDisks; };
 
+        struct WritePolicy : Column<21, NScheme::NTypeIds::String> { using Type = NKikimrBlobStorage::TGroupWritePolicy; };
+
         // VirtualGroup management code
         struct VirtualGroupName  : Column<112, NScheme::NTypeIds::Utf8>   {}; // unique name of the virtual group
         struct VirtualGroupState : Column<102, NScheme::NTypeIds::Uint32> { using Type = NKikimrBlobStorage::EVirtualGroupState; };
@@ -104,7 +106,7 @@ struct Schema : NIceDb::Schema {
         using TKey = TableKey<ID>;
         using TColumns = TableColumns<ID, Generation, ErasureSpecies, Owner, DesiredPDiskCategory, DesiredVDiskCategory,
               EncryptionMode, LifeCyclePhase, MainKeyId, EncryptedGroupKey, GroupKeyNonce, MainKeyVersion, Down,
-              SeenOperational, DecommitStatus, GroupSizeInUnits, BridgePileId, EnableSingleDcMode, SurvivingDc, ExcludedVDisks, VirtualGroupName, VirtualGroupState,
+              SeenOperational, DecommitStatus, GroupSizeInUnits, BridgePileId, EnableSingleDcMode, SurvivingDc, ExcludedVDisks, WritePolicy, VirtualGroupName, VirtualGroupState,
               HiveId, Database, BlobDepotConfig, BlobDepotId, ErrorReason, NeedAlter, Metrics, BridgeGroupInfo>;
     };
 

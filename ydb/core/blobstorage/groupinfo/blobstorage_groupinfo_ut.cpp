@@ -85,10 +85,95 @@ Y_UNIT_TEST_SUITE(TBlobStorageGroupInfoTest) {
         UNIT_ASSERT(cleared);
         UNIT_ASSERT(cleared->ExcludedVDisks.empty());
         UNIT_ASSERT(cleared->HasSingleDcModeChanged(*info));
+        auto* writePolicy = group.MutableWritePolicy();
+        writePolicy->AddWriteOk()->AddPartsPerFailRealm(2);
+        auto* durability = writePolicy->AddWriteDurability();
+        durability->AddPartsPerFailRealm(2);
+        durability->AddPartsPerFailRealm(2);
+        const auto withPolicy = TBlobStorageGroupInfo::Parse(group, nullptr, nullptr);
+        UNIT_ASSERT(withPolicy);
+        UNIT_ASSERT(withPolicy->WritePolicy);
+        UNIT_ASSERT(withPolicy->HasSingleDcModeChanged(*cleared));
+        TBlobStorageGroupInfo policyCopy(withPolicy, TVDiskID(0, 3, 0, 0, 0), TActorId());
+        UNIT_ASSERT(policyCopy.WritePolicy == withPolicy->WritePolicy);
+        UNIT_ASSERT(!policyCopy.HasSingleDcModeChanged(*withPolicy));
+        group.ClearWritePolicy();
+        UNIT_ASSERT(TBlobStorageGroupInfo::Parse(group, nullptr, nullptr)->HasSingleDcModeChanged(*withPolicy));
+        group.MutableWritePolicy();
+        UNIT_ASSERT(!TBlobStorageGroupInfo::Parse(group, nullptr, nullptr));
+        group.ClearWritePolicy();
         group.MutableExcludedVDisks()->AddVDiskOrderNumber(9);
         TStringStream error;
         UNIT_ASSERT(!TBlobStorageGroupInfo::Parse(group, nullptr, &error));
         UNIT_ASSERT(!error.Str().empty());
+    }
+
+    Y_UNIT_TEST(WritePolicyLayouts) {
+        struct TCase {
+            TVector<ui32> Layout;
+            TVector<ui32> Success;
+            TVector<ui32> Failure;
+        };
+        for (const auto& item : TVector<TCase>{
+                {{2}, {0, 2, 0}, {1, 0, 0}},
+                {{2, 2}, {2, 0, 2}, {2, 1, 1}},
+                {{1, 2}, {1, 0, 2}, {3, 0, 0}},
+                {{1, 1}, {1, 0, 1}, {2, 0, 0}},
+                {{1, 1, 1}, {1, 1, 1}, {3, 3, 0}},
+                {{2, 2, 2}, {2, 3, 2}, {3, 1, 3}}}) {
+            NKikimrBlobStorage::TGroupWritePolicy proto;
+            auto* layout = proto.AddWriteOk();
+            for (ui32 count : item.Layout) {
+                layout->AddPartsPerFailRealm(count);
+            }
+            proto.AddWriteDurability()->CopyFrom(*layout);
+            const auto policy = TBlobStorageGroupInfo::TWritePolicy::Parse(proto);
+            UNIT_ASSERT(policy);
+            UNIT_ASSERT(policy->CheckWriteOk(item.Success));
+            UNIT_ASSERT(policy->CheckWriteDurability(item.Success));
+            UNIT_ASSERT(!policy->CheckWriteOk(item.Failure));
+            UNIT_ASSERT(!policy->CheckWriteDurability(item.Failure));
+            UNIT_ASSERT(TBlobStorageGroupInfo::TWritePolicy::Parse(policy->ToProto()) == policy);
+        }
+    }
+
+    Y_UNIT_TEST(WritePolicyAlternativesAndValidation) {
+        NKikimrBlobStorage::TGroupWritePolicy proto;
+        auto* layout = proto.AddWriteOk();
+        layout->AddPartsPerFailRealm(2);
+        layout->AddPartsPerFailRealm(2);
+        layout = proto.AddWriteOk();
+        for (ui32 i = 0; i < 3; ++i) {
+            layout->AddPartsPerFailRealm(1);
+        }
+        layout = proto.AddWriteDurability();
+        for (ui32 i = 0; i < 3; ++i) {
+            layout->AddPartsPerFailRealm(2);
+        }
+        const auto policy = TBlobStorageGroupInfo::TWritePolicy::Parse(proto);
+        UNIT_ASSERT(policy);
+        UNIT_ASSERT(policy->CheckWriteOk({2, 2, 0}));
+        UNIT_ASSERT(policy->CheckWriteOk({1, 1, 1}));
+        UNIT_ASSERT(!policy->CheckWriteOk({2, 1, 0}));
+        UNIT_ASSERT(!policy->CheckWriteDurability({2, 2, 0}));
+        UNIT_ASSERT(policy->CheckWriteDurability({2, 2, 2}));
+        UNIT_ASSERT(!policy->CheckWriteOk({}));
+        proto.AddWriteOk()->CopyFrom(proto.GetWriteOk(0));
+        UNIT_ASSERT(TBlobStorageGroupInfo::TWritePolicy::Parse(proto) == policy);
+        proto.ClearWriteOk();
+        UNIT_ASSERT(!TBlobStorageGroupInfo::TWritePolicy::Parse(proto));
+        for (const auto& invalid : TVector<TVector<ui32>>{{}, {0}, {4}, {1, 1, 1, 1}}) {
+            auto malformed = policy->ToProto();
+            auto* bad = malformed.MutableWriteOk(0);
+            bad->ClearPartsPerFailRealm();
+            for (ui32 count : invalid) {
+                bad->AddPartsPerFailRealm(count);
+            }
+            UNIT_ASSERT(!TBlobStorageGroupInfo::TWritePolicy::Parse(malformed));
+        }
+        auto malformed = policy->ToProto();
+        malformed.ClearWriteDurability();
+        UNIT_ASSERT(!TBlobStorageGroupInfo::TWritePolicy::Parse(malformed));
     }
 
     Y_UNIT_TEST(TestBelongsToSubgroup) {
