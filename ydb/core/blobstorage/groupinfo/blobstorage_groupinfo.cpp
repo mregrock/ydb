@@ -14,6 +14,7 @@
 
 #include <library/cpp/digest/crc32c/crc32c.h>
 
+#include <util/generic/algorithm.h>
 #include <util/string/printf.h>
 #include <util/string/escape.h>
 #include <util/stream/input.h>
@@ -726,8 +727,10 @@ TIntrusivePtr<TBlobStorageGroupInfo> TBlobStorageGroupInfo::Parse(const NKikimrB
             }
             return nullptr;
         }
-        res->ExcludedVDisks.insert(orderNumber);
+        res->ExcludedVDisks.push_back(orderNumber);
     }
+
+    SortUnique(res->ExcludedVDisks);
 
     // process encryption parameters
     res->EncryptionMode = static_cast<EEncryptionMode>(group.GetEncryptionMode());

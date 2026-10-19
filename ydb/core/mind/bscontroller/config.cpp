@@ -7,6 +7,8 @@
 #include <ydb/core/blobstorage/nodewarden/node_warden_events.h>
 #include <ydb/core/node_whiteboard/node_whiteboard.h>
 
+#include <util/generic/algorithm.h>
+
 #define YDB_LOG_THIS_FILE_COMPONENT BS_CONTROLLER_AUDIT
 
 namespace NKikimr::NBsController {
@@ -1361,13 +1363,14 @@ namespace NKikimr::NBsController {
                 || group->VirtualGroupState || group->BridgeGroupInfo) {
             throw TExError() << "VDisk exclusions require a physical mirror-3-dc group";
         }
-        TSet<ui32> excluded;
+        TVector<ui32> excluded;
         for (ui32 orderNumber : cmd.GetExcludedVDisks().GetVDiskOrderNumber()) {
             if (orderNumber >= group->Topology->GetTotalVDisksNum()) {
                 throw TExError() << "VDisk order number is outside group topology: " << orderNumber;
             }
-            excluded.insert(orderNumber);
+            excluded.push_back(orderNumber);
         }
+        SortUnique(excluded);
         NKikimrBlobStorage::TExcludedVDisks normalized;
         for (ui32 orderNumber : excluded) {
             normalized.AddVDiskOrderNumber(orderNumber);

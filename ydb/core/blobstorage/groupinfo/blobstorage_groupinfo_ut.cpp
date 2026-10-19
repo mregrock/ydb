@@ -64,12 +64,14 @@ Y_UNIT_TEST_SUITE(TBlobStorageGroupInfoTest) {
         const auto original = TBlobStorageGroupInfo::Parse(group, nullptr, nullptr);
         UNIT_ASSERT(original);
         UNIT_ASSERT(original->ExcludedVDisks.empty());
-        group.MutableExcludedVDisks()->AddVDiskOrderNumber(1);
         group.MutableExcludedVDisks()->AddVDiskOrderNumber(7);
         group.MutableExcludedVDisks()->AddVDiskOrderNumber(1);
+        group.MutableExcludedVDisks()->AddVDiskOrderNumber(7);
         const auto info = TBlobStorageGroupInfo::Parse(group, nullptr, nullptr);
         UNIT_ASSERT(info);
         UNIT_ASSERT_VALUES_EQUAL(info->ExcludedVDisks.size(), 2);
+        UNIT_ASSERT_VALUES_EQUAL(info->ExcludedVDisks[0], 1);
+        UNIT_ASSERT_VALUES_EQUAL(info->ExcludedVDisks[1], 7);
         UNIT_ASSERT(info->HasSingleDcModeChanged(*original));
         for (ui32 orderNumber = 0; orderNumber < 9; ++orderNumber) {
             UNIT_ASSERT_VALUES_EQUAL(info->IsVDiskExcluded(info->GetVDiskId(orderNumber)),
