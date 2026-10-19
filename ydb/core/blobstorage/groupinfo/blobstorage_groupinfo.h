@@ -15,6 +15,7 @@
 #include <util/str_stl.h>
 #include <util/digest/numeric.h>
 #include <util/generic/hash_set.h>
+#include <util/generic/set.h>
 
 namespace NKikimrBlobStorage {
     class TGroupInfo;
@@ -491,10 +492,17 @@ public:
     ui32 GroupSizeInUnits;
     bool EnableSingleDcMode = false;
     std::optional<ui32> SurvivingDc;
+    // Logical order numbers in this group's topology; not physical VSlots.
+    TSet<ui32> ExcludedVDisks;
+
+    bool IsVDiskExcluded(const TVDiskIdShort& vdisk) const {
+        return ExcludedVDisks.contains(GetOrderNumber(vdisk));
+    }
 
     bool HasSingleDcModeChanged(const TBlobStorageGroupInfo& previous) const {
         return EnableSingleDcMode != previous.EnableSingleDcMode
-            || (EnableSingleDcMode && SurvivingDc != previous.SurvivingDc);
+            || (EnableSingleDcMode && SurvivingDc != previous.SurvivingDc)
+            || ExcludedVDisks != previous.ExcludedVDisks;
     }
 
     bool IsVDiskInActiveRealm(const TVDiskIdShort& vdisk) const {

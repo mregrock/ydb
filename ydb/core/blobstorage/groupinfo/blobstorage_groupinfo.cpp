@@ -654,6 +654,7 @@ TBlobStorageGroupInfo::TBlobStorageGroupInfo(const TIntrusivePtr<TBlobStorageGro
     , GroupSizeInUnits(info->GroupSizeInUnits)
     , EnableSingleDcMode(info->EnableSingleDcMode)
     , SurvivingDc(info->SurvivingDc)
+    , ExcludedVDisks(info->ExcludedVDisks)
     , Topology(info->Topology)
     , Dynamic(GroupID, GroupGeneration)
     , EncryptionMode(info->EncryptionMode)
@@ -716,6 +717,16 @@ TIntrusivePtr<TBlobStorageGroupInfo> TBlobStorageGroupInfo::Parse(const NKikimrB
     res->EnableSingleDcMode = group.GetEnableSingleDcMode();
     if (group.HasSurvivingDc()) {
         res->SurvivingDc = group.GetSurvivingDc();
+    }
+
+    for (ui32 orderNumber : group.GetExcludedVDisks().GetVDiskOrderNumber()) {
+        if (orderNumber >= res->GetTotalVDisksNum()) {
+            if (err) {
+                *err << "Excluded VDisk order number is outside group topology: " << orderNumber;
+            }
+            return nullptr;
+        }
+        res->ExcludedVDisks.insert(orderNumber);
     }
 
     // process encryption parameters

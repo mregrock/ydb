@@ -248,6 +248,7 @@ public:
                 if (groups.HaveValue<T::SurvivingDc>()) {
                     group.SurvivingDc = groups.GetValue<T::SurvivingDc>();
                 }
+                group.ExcludedVDisks = groups.GetValueOrDefault<T::ExcludedVDisks>();
                 group.DecommitStatus = groups.GetValueOrDefault<T::DecommitStatus>();
                 if (group.DecommitStatus == NKikimrBlobStorage::TGroupDecommitStatus::DONE) {
                     group.VDisksInGroup.clear();

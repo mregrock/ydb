@@ -96,6 +96,11 @@ message TVDiskLocation {
     optional uint64 PDiskGuid = 4;
 }
 
+// Logical VDisk positions, independent of group generation and physical placement.
+message TExcludedVDisks {
+    repeated uint32 VDiskOrderNumber = 1;
+}
+
 message TGroupInfo {
     message TFailRealm {
         message TFailDomain {
@@ -129,6 +134,7 @@ message TGroupInfo {
     optional bool EnableSingleDcMode = 22 [default = false];
     // Zero-based index in Rings of the surviving logical fail realm; required when EnableSingleDcMode is true.
     optional uint32 SurvivingDc = 23;
+    optional TExcludedVDisks ExcludedVDisks = 24;
 }
 
 // VDiskStatus ordering is assumed to be lower for bad statuses and higher for good ones

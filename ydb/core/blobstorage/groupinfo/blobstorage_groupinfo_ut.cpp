@@ -47,6 +47,48 @@ Y_UNIT_TEST_SUITE(TBlobStorageGroupInfoTest) {
         UNIT_ASSERT(!info->SurvivingDc);
     }
 
+    Y_UNIT_TEST(ExcludedVDisks) {
+        NKikimrBlobStorage::TGroupInfo group;
+        group.SetGroupID(0);
+        group.SetGroupGeneration(1);
+        group.SetErasureSpecies(TBlobStorageGroupType::ErasureMirror3dc);
+        for (ui32 realm = 0; realm < 3; ++realm) {
+            auto *ring = group.AddRings();
+            for (ui32 domain = 0; domain < 3; ++domain) {
+                auto *location = ring->AddFailDomains()->AddVDiskLocations();
+                location->SetNodeID(1 + realm * 3 + domain);
+                location->SetPDiskID(1);
+                location->SetVDiskSlotID(1);
+            }
+        }
+        const auto original = TBlobStorageGroupInfo::Parse(group, nullptr, nullptr);
+        UNIT_ASSERT(original);
+        UNIT_ASSERT(original->ExcludedVDisks.empty());
+        group.MutableExcludedVDisks()->AddVDiskOrderNumber(1);
+        group.MutableExcludedVDisks()->AddVDiskOrderNumber(7);
+        group.MutableExcludedVDisks()->AddVDiskOrderNumber(1);
+        const auto info = TBlobStorageGroupInfo::Parse(group, nullptr, nullptr);
+        UNIT_ASSERT(info);
+        UNIT_ASSERT_VALUES_EQUAL(info->ExcludedVDisks.size(), 2);
+        UNIT_ASSERT(info->HasSingleDcModeChanged(*original));
+        for (ui32 orderNumber = 0; orderNumber < 9; ++orderNumber) {
+            UNIT_ASSERT_VALUES_EQUAL(info->IsVDiskExcluded(info->GetVDiskId(orderNumber)),
+                orderNumber == 1 || orderNumber == 7);
+        }
+        TBlobStorageGroupInfo copy(info, TVDiskID(0, 2, 0, 0, 0), TActorId());
+        UNIT_ASSERT(copy.ExcludedVDisks == info->ExcludedVDisks);
+        UNIT_ASSERT(!copy.HasSingleDcModeChanged(*info));
+        group.ClearExcludedVDisks();
+        const auto cleared = TBlobStorageGroupInfo::Parse(group, nullptr, nullptr);
+        UNIT_ASSERT(cleared);
+        UNIT_ASSERT(cleared->ExcludedVDisks.empty());
+        UNIT_ASSERT(cleared->HasSingleDcModeChanged(*info));
+        group.MutableExcludedVDisks()->AddVDiskOrderNumber(9);
+        TStringStream error;
+        UNIT_ASSERT(!TBlobStorageGroupInfo::Parse(group, nullptr, &error));
+        UNIT_ASSERT(!error.Str().empty());
+    }
+
     Y_UNIT_TEST(TestBelongsToSubgroup) {
         for (ui32 disks = 1; disks < 4; ++disks) {
             for (auto [erasureType, _] : TErasureType::ErasureNames) {
