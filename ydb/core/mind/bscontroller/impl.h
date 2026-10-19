@@ -704,6 +704,8 @@ public:
         Table::GroupSizeInUnits::Type GroupSizeInUnits;
         bool EnableSingleDcMode = false;
         TMaybe<ui32> SurvivingDc;
+        NKikimrBlobStorage::TExcludedVDisks ExcludedVDisks;
+        std::optional<NKikimrBlobStorage::TGroupWritePolicy> WritePolicy;
 
         Table::BridgePileId::Type BridgePileId;
 
@@ -786,6 +788,8 @@ public:
                     Table::GroupSizeInUnits,
                     Table::EnableSingleDcMode,
                     Table::SurvivingDc,
+                    Table::ExcludedVDisks,
+                    Table::WritePolicy,
                     Table::BridgePileId,
                     Table::VirtualGroupName,
                     Table::VirtualGroupState,
@@ -813,6 +817,8 @@ public:
                     &TGroupInfo::GroupSizeInUnits,
                     &TGroupInfo::EnableSingleDcMode,
                     &TGroupInfo::SurvivingDc,
+                    &TGroupInfo::ExcludedVDisks,
+                    &TGroupInfo::WritePolicy,
                     &TGroupInfo::BridgePileId,
                     &TGroupInfo::VirtualGroupName,
                     &TGroupInfo::VirtualGroupState,

@@ -7,6 +7,8 @@
 #include <ydb/core/blobstorage/nodewarden/node_warden_events.h>
 #include <ydb/core/node_whiteboard/node_whiteboard.h>
 
+#include <util/generic/algorithm.h>
+
 #define YDB_LOG_THIS_FILE_COMPONENT BS_CONTROLLER_AUDIT
 
 namespace NKikimr::NBsController {
@@ -1349,6 +1351,70 @@ namespace NKikimr::NBsController {
             pb->SetReadOnly(vslot.Mood == TMood::ReadOnly);
         }
 
+    void TBlobStorageController::TConfigState::ExecuteStep(const NKikimrBlobStorage::TSetGroupExcludedVDisks& cmd, TStatus&) {
+        auto *group = Groups.FindForUpdate(TGroupId::FromProto(&cmd, &NKikimrBlobStorage::TSetGroupExcludedVDisks::GetGroupId));
+        if (!group) {
+            throw TExGroupNotFound(cmd.GetGroupId());
+        }
+        if (group->Generation != cmd.GetGroupGeneration()) {
+            throw TExGroupGenerationMismatch(cmd.GetGroupId(), cmd.GetGroupGeneration(), group->Generation);
+        }
+        if (group->ErasureSpecies != TBlobStorageGroupType::ErasureMirror3dc || group->DDisk
+                || group->VirtualGroupState || group->BridgeGroupInfo) {
+            throw TExError() << "VDisk exclusions require a physical mirror-3-dc group";
+        }
+        TVector<ui32> excluded;
+        for (ui32 orderNumber : cmd.GetExcludedVDisks().GetVDiskOrderNumber()) {
+            if (orderNumber >= group->Topology->GetTotalVDisksNum()) {
+                throw TExError() << "VDisk order number is outside group topology: " << orderNumber;
+            }
+            excluded.push_back(orderNumber);
+        }
+        SortUnique(excluded);
+        NKikimrBlobStorage::TExcludedVDisks normalized;
+        for (ui32 orderNumber : excluded) {
+            normalized.AddVDiskOrderNumber(orderNumber);
+        }
+        if (group->ExcludedVDisks.SerializeAsString() != normalized.SerializeAsString()) {
+            group->ExcludedVDisks = std::move(normalized);
+            GroupContentChanged.insert(group->ID);
+        }
+    }
+
+    void TBlobStorageController::TConfigState::ExecuteStep(const NKikimrBlobStorage::TSetGroupWritePolicy& cmd, TStatus&) {
+        auto* group = Groups.FindForUpdate(TGroupId::FromProto(&cmd, &NKikimrBlobStorage::TSetGroupWritePolicy::GetGroupId));
+        if (!group) {
+            throw TExGroupNotFound(cmd.GetGroupId());
+        }
+        if (group->Generation != cmd.GetGroupGeneration()) {
+            throw TExGroupGenerationMismatch(cmd.GetGroupId(), cmd.GetGroupGeneration(), group->Generation);
+        }
+        if (group->ErasureSpecies != TBlobStorageGroupType::ErasureMirror3dc || group->DDisk
+                || group->VirtualGroupState || group->BridgeGroupInfo) {
+            throw TExError() << "Write policy requires a physical mirror-3-dc group";
+        }
+        std::optional<NKikimrBlobStorage::TGroupWritePolicy> policy;
+        if (cmd.HasWritePolicy()) {
+            if (group->Topology->GetTotalFailRealmsNum() != 3
+                    || group->Topology->GetNumFailDomainsPerFailRealm() != 3
+                    || group->Topology->GetNumVDisksPerFailDomain() != 1) {
+                throw TExError() << "Write policy requires a 3x3x1 group geometry";
+            }
+            TStringStream error;
+            const auto parsed = TBlobStorageGroupInfo::TWritePolicy::Parse(cmd.GetWritePolicy(), &error);
+            if (!parsed) {
+                throw TExError() << error.Str();
+            }
+            policy = parsed->ToProto();
+        }
+        if (group->WritePolicy.has_value() != policy.has_value()
+                || (group->WritePolicy && policy
+                    && group->WritePolicy->SerializeAsString() != policy->SerializeAsString())) {
+            group->WritePolicy = std::move(policy);
+            GroupContentChanged.insert(group->ID);
+        }
+    }
+
     void TBlobStorageController::TConfigState::ExecuteStep(const NKikimrBlobStorage::TSetGroupSingleDcMode& cmd, TStatus&) {
         auto *group = Groups.FindForUpdate(TGroupId::FromProto(&cmd, &NKikimrBlobStorage::TSetGroupSingleDcMode::GetGroupId));
         if (!group) {
@@ -1393,6 +1459,10 @@ namespace NKikimr::NBsController {
             pb->SetBoxId(std::get<0>(group.StoragePoolId));
             pb->SetStoragePoolId(std::get<1>(group.StoragePoolId));
             pb->SetSeenOperational(group.SeenOperational);
+            pb->MutableExcludedVDisks()->CopyFrom(group.ExcludedVDisks);
+            if (group.WritePolicy) {
+                pb->MutableWritePolicy()->CopyFrom(*group.WritePolicy);
+            }
             pb->SetEnableSingleDcMode(group.EnableSingleDcMode);
             if (group.SurvivingDc) {
                 pb->SetSurvivingDc(*group.SurvivingDc);
@@ -1543,6 +1613,10 @@ namespace NKikimr::NBsController {
                 groupInfo.BridgeProxyGroupId->CopyToProto(group, &NKikimrBlobStorage::TGroupInfo::SetBridgeProxyGroupId);
             }
             groupInfo.BridgePileId.CopyToProto(group, &NKikimrBlobStorage::TGroupInfo::SetBridgePileId);
+            group->MutableExcludedVDisks()->CopyFrom(groupInfo.ExcludedVDisks);
+            if (groupInfo.WritePolicy) {
+                group->MutableWritePolicy()->CopyFrom(*groupInfo.WritePolicy);
+            }
             group->SetEnableSingleDcMode(groupInfo.EnableSingleDcMode);
             if (groupInfo.SurvivingDc) {
                 group->SetSurvivingDc(*groupInfo.SurvivingDc);

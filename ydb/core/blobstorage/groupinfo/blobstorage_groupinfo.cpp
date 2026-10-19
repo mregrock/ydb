@@ -14,6 +14,7 @@
 
 #include <library/cpp/digest/crc32c/crc32c.h>
 
+#include <util/generic/algorithm.h>
 #include <util/string/printf.h>
 #include <util/string/escape.h>
 #include <util/stream/input.h>
@@ -652,8 +653,10 @@ TBlobStorageGroupInfo::TBlobStorageGroupInfo(const TIntrusivePtr<TBlobStorageGro
     , GroupGeneration(vdiskId.GroupGeneration)
     , Type(info->Type)
     , GroupSizeInUnits(info->GroupSizeInUnits)
+    , WritePolicy(info->WritePolicy)
     , EnableSingleDcMode(info->EnableSingleDcMode)
     , SurvivingDc(info->SurvivingDc)
+    , ExcludedVDisks(info->ExcludedVDisks)
     , Topology(info->Topology)
     , Dynamic(GroupID, GroupGeneration)
     , EncryptionMode(info->EncryptionMode)
@@ -665,6 +668,80 @@ TBlobStorageGroupInfo::TBlobStorageGroupInfo(const TIntrusivePtr<TBlobStorageGro
 {
     Dynamic.ServiceIdForOrderNumber.resize(Topology->GetTotalVDisksNum(), TActorId());
     Dynamic.ServiceIdForOrderNumber[GetOrderNumber(vdiskId)] = actorId;
+}
+
+std::optional<TBlobStorageGroupInfo::TWritePolicy> TBlobStorageGroupInfo::TWritePolicy::Parse(
+        const NKikimrBlobStorage::TGroupWritePolicy& policy, IOutputStream* err) {
+    TWritePolicy result;
+    const auto parse = [&](const auto& source, TLayouts* target) {
+        if (source.empty()) {
+            if (err) {
+                *err << "WriteOk and WriteDurability must each contain at least one layout";
+            }
+            return false;
+        }
+        for (const auto& item : source) {
+            TVector<ui32> layout(item.GetPartsPerFailRealm().begin(), item.GetPartsPerFailRealm().end());
+            if (layout.empty() || layout.size() > 3
+                    || std::any_of(layout.begin(), layout.end(), [](ui32 count) { return count == 0 || count > 3; })) {
+                if (err) {
+                    *err << "A write layout must contain 1 to 3 realm requirements, each between 1 and 3";
+                }
+                return false;
+            }
+            Sort(layout, std::greater<ui32>());
+            target->push_back(std::move(layout));
+        }
+        SortUnique(*target);
+        return true;
+    };
+    if (!parse(policy.GetWriteOk(), &result.WriteOk) || !parse(policy.GetWriteDurability(), &result.WriteDurability)) {
+        return std::nullopt;
+    }
+    return result;
+}
+
+NKikimrBlobStorage::TGroupWritePolicy TBlobStorageGroupInfo::TWritePolicy::ToProto() const {
+    NKikimrBlobStorage::TGroupWritePolicy result;
+    const auto serialize = [](const TLayouts& source, auto* target) {
+        for (const auto& layout : source) {
+            auto* item = target->Add();
+            for (ui32 count : layout) {
+                item->AddPartsPerFailRealm(count);
+            }
+        }
+    };
+    serialize(WriteOk, result.MutableWriteOk());
+    serialize(WriteDurability, result.MutableWriteDurability());
+    return result;
+}
+
+bool TBlobStorageGroupInfo::TWritePolicy::CheckLayouts(const TLayouts& layouts, TVector<ui32> partsPerFailRealm) {
+    Sort(partsPerFailRealm, std::greater<ui32>());
+    for (const auto& layout : layouts) {
+        if (partsPerFailRealm.size() < layout.size()) {
+            continue;
+        }
+        bool matches = true;
+        for (size_t i = 0; i < layout.size(); ++i) {
+            if (partsPerFailRealm[i] < layout[i]) {
+                matches = false;
+                break;
+            }
+        }
+        if (matches) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool TBlobStorageGroupInfo::TWritePolicy::CheckWriteOk(TVector<ui32> partsPerFailRealm) const {
+    return CheckLayouts(WriteOk, std::move(partsPerFailRealm));
+}
+
+bool TBlobStorageGroupInfo::TWritePolicy::CheckWriteDurability(TVector<ui32> partsPerFailRealm) const {
+    return CheckLayouts(WriteDurability, std::move(partsPerFailRealm));
 }
 
 TBlobStorageGroupInfo::~TBlobStorageGroupInfo()
@@ -716,6 +793,34 @@ TIntrusivePtr<TBlobStorageGroupInfo> TBlobStorageGroupInfo::Parse(const NKikimrB
     res->EnableSingleDcMode = group.GetEnableSingleDcMode();
     if (group.HasSurvivingDc()) {
         res->SurvivingDc = group.GetSurvivingDc();
+    }
+
+    for (ui32 orderNumber : group.GetExcludedVDisks().GetVDiskOrderNumber()) {
+        if (orderNumber >= res->GetTotalVDisksNum()) {
+            if (err) {
+                *err << "Excluded VDisk order number is outside group topology: " << orderNumber;
+            }
+            return nullptr;
+        }
+        res->ExcludedVDisks.push_back(orderNumber);
+    }
+
+    SortUnique(res->ExcludedVDisks);
+
+    if (group.HasWritePolicy()) {
+        if (res->Type.GetErasure() != TBlobStorageGroupType::ErasureMirror3dc
+                || res->GetTopology().GetTotalFailRealmsNum() != 3
+                || res->GetTopology().GetNumFailDomainsPerFailRealm() != 3
+                || res->GetTopology().GetNumVDisksPerFailDomain() != 1) {
+            if (err) {
+                *err << "Write policy requires mirror-3-dc 3x3x1";
+            }
+            return nullptr;
+        }
+        res->WritePolicy = TWritePolicy::Parse(group.GetWritePolicy(), err);
+        if (!res->WritePolicy) {
+            return nullptr;
+        }
     }
 
     // process encryption parameters

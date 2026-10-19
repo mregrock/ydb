@@ -15,6 +15,9 @@
 #include <util/str_stl.h>
 #include <util/digest/numeric.h>
 #include <util/generic/hash_set.h>
+#include <util/generic/vector.h>
+
+#include <algorithm>
 
 namespace NKikimrBlobStorage {
     class TGroupInfo;
@@ -489,12 +492,39 @@ public:
     const TBlobStorageGroupType Type;
     // the size to match PDisk.SlotSizeInUnits
     ui32 GroupSizeInUnits;
+    struct TWritePolicy {
+        using TLayouts = TVector<TVector<ui32>>;
+        TLayouts WriteOk;
+        TLayouts WriteDurability;
+
+        bool operator==(const TWritePolicy&) const = default;
+
+        static std::optional<TWritePolicy> Parse(const NKikimrBlobStorage::TGroupWritePolicy& policy,
+            IOutputStream* err = nullptr);
+        NKikimrBlobStorage::TGroupWritePolicy ToProto() const;
+        // Counts of distinct VDisks holding their correct part, one count per failrealm.
+        bool CheckWriteOk(TVector<ui32> partsPerFailRealm) const;
+        bool CheckWriteDurability(TVector<ui32> partsPerFailRealm) const;
+
+    private:
+        static bool CheckLayouts(const TLayouts& layouts, TVector<ui32> partsPerFailRealm);
+    };
+
+    std::optional<TWritePolicy> WritePolicy;
     bool EnableSingleDcMode = false;
     std::optional<ui32> SurvivingDc;
+    // Logical order numbers in this group's topology; not physical VSlots.
+    TVector<ui32> ExcludedVDisks;
+
+    bool IsVDiskExcluded(const TVDiskIdShort& vdisk) const {
+        return std::find(ExcludedVDisks.begin(), ExcludedVDisks.end(), GetOrderNumber(vdisk)) != ExcludedVDisks.end();
+    }
 
     bool HasSingleDcModeChanged(const TBlobStorageGroupInfo& previous) const {
         return EnableSingleDcMode != previous.EnableSingleDcMode
-            || (EnableSingleDcMode && SurvivingDc != previous.SurvivingDc);
+            || (EnableSingleDcMode && SurvivingDc != previous.SurvivingDc)
+            || ExcludedVDisks != previous.ExcludedVDisks
+            || WritePolicy != previous.WritePolicy;
     }
 
     bool IsVDiskInActiveRealm(const TVDiskIdShort& vdisk) const {
